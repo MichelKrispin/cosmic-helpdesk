@@ -250,7 +250,7 @@ nav, .app-shell > header { height: 92px; max-width: 1280px; margin: auto; paddin
 .mission-dossier > .kicker { margin-top: 28px; }
 .story-recap { margin: 6px 0 26px; padding-left: 14px; border-left: 2px solid #4b5368; color: #858da0; font-size: 13px; line-height: 1.55; }
 .mission-dossier h1 { margin: 0; font-size: clamp(42px, 7vw, 72px); line-height: 1; letter-spacing: -.05em; }
-.story-lede { max-width: 720px; margin: 18px 0 28px; color: #c0c5d0; font-size: 17px; line-height: 1.6; }
+.story-lede { max-width: 720px; margin: 18px 0 28px; color: #c0c5d0; font-size: 17px; line-height: 1.6; white-space: pre-line; }
 .mission-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .mission-facts article { padding: 15px; border: 1px solid #333d52; background: #0a0f1b; }
 .mission-facts small, .mission-task-list > small, .briefing-crew > small { color: #737d92; font: 9px 'DM Mono'; letter-spacing: .12em; }

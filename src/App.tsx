@@ -244,7 +244,8 @@ function LanguageSelector({ language, onChange, disabled = false }: { language: 
 }
 
 function MissionBriefing({ view, players, isHost, onBegin, onLeave }: { view: GameView; players: Player[]; isHost: boolean; onBegin: () => void; onLeave: () => void }) {
-  const t = ui(view.language); const level = campaignLevel(view.campaignLevel || 1)
+  const t = ui(view.language); const chapter = campaignLevel(view.campaignLevel || 1)
+  const level = chapter.id === 1 ? { ...chapter, briefing: { ...chapter.briefing, [view.language]: `\n\n${t.stationOrientation}\n\n${t.stationIntro.join('\n\n')}\n\n${chapter.briefing[view.language]}` } } : chapter
   const previous = level.id > 1 ? campaignLevel(level.id - 1).success[view.language] : (view.language === 'de' ? 'Die Nachtschicht beginnt mit einem schwachen Notsignal aus einem stillgelegten Relais.' : 'The night shift begins with a faint distress call from a decommissioned relay.')
   const tasks = view.language === 'de' ? {
     router: 'Öffnet den Weg, von dem dieses Kapitel abhängt. Frequenz, Spezies und Protokoll bestimmen die zwei sicheren Knoten.',
