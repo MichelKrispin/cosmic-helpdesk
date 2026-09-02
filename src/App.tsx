@@ -36,6 +36,32 @@ function formatTime(ms: number) {
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 }
 
+const campaignProgressKey = 'cosmic-helpdesk-campaign-progress'
+const campaignScoreKey = (level: number) => `cosmic-helpdesk-best-campaign-${level}`
+
+function campaignChecksum(value: string) {
+  let hash = 2166136261
+  for (const character of value) { hash ^= character.charCodeAt(0); hash = Math.imul(hash, 16777619) }
+  return (hash >>> 0).toString(36).toUpperCase().padStart(7, '0')
+}
+
+function createRecoveryCode(progress: number) {
+  const scores = campaignLevels.map(level => Math.max(0, Number(localStorage.getItem(campaignScoreKey(level.id))) || 0).toString(36)).join('.')
+  const payload = `1|${progress.toString(36)}|${scores}`
+  return `CHD1-${progress.toString(36).toUpperCase()}-${scores.toUpperCase()}-${campaignChecksum(payload)}`
+}
+
+function readRecoveryCode(code: string) {
+  const match = code.trim().toLowerCase().match(/^chd1-([0-9a-z]+)-([0-9a-z.]+)-([0-9a-z]+)$/)
+  if (!match) return null
+  const progress = Number.parseInt(match[1], 36)
+  const scoreParts = match[2].split('.')
+  const scores = scoreParts.map(score => Number.parseInt(score, 36))
+  const payload = `1|${match[1]}|${match[2]}`
+  if (campaignChecksum(payload).toLowerCase() !== match[3] || !Number.isInteger(progress) || progress < 1 || progress > campaignLevels.length || scores.length !== campaignLevels.length || scores.some(score => !Number.isSafeInteger(score) || score < 0)) return null
+  return { progress, scores }
+}
+
 function App() {
   const initialInvite = useMemo(parseInvite, [])
   const [screen, setScreen] = useState<Screen>(initialInvite ? 'lobby' : 'home')
@@ -47,7 +73,7 @@ function App() {
   const [difficulty, setDifficulty] = useState<DifficultyId>('standard')
   const [gameStyle, setGameStyle] = useState<GameStyle>('fast')
   const [campaignLevelId, setCampaignLevelId] = useState(1)
-  const [campaignProgress, setCampaignProgress] = useState(() => Math.max(1, Math.min(campaignLevels.length, Number(localStorage.getItem('cosmic-helpdesk-campaign-progress')) || 1)))
+  const [campaignProgress, setCampaignProgress] = useState(() => Math.max(1, Math.min(campaignLevels.length, Number(localStorage.getItem(campaignProgressKey)) || 1)))
   const [copied, setCopied] = useState(false)
   const [bestScore, setBestScore] = useState(0)
   const [newBest, setNewBest] = useState(false)
@@ -148,7 +174,7 @@ function App() {
       const unlocked = Math.min(campaignLevels.length, view.campaignLevel + 1)
       setCampaignProgress(previousProgress => {
         const next = Math.max(previousProgress, unlocked)
-        localStorage.setItem('cosmic-helpdesk-campaign-progress', String(next))
+        localStorage.setItem(campaignProgressKey, String(next))
         return next
       })
     }
@@ -163,6 +189,16 @@ function App() {
   const chooseDifficulty = (next: DifficultyId) => { if (!isHost) return; commitDifficulty(next); sendLobby(playersRef.current, languageRef.current, next) }
   const chooseGameStyle = (next: GameStyle) => { if (!isHost) return; commitGameStyle(next); sendLobby(playersRef.current, languageRef.current, difficultyRef.current, next) }
   const chooseCampaignLevel = (next: number) => { if (!isHost || next > campaignProgress) return; commitCampaignLevel(next); sendLobby(playersRef.current, languageRef.current, difficultyRef.current, gameStyleRef.current, next) }
+  const restoreCampaign = (code: string) => {
+    if (!isHost) return false
+    const save = readRecoveryCode(code)
+    if (!save) return false
+    localStorage.setItem(campaignProgressKey, String(save.progress))
+    save.scores.forEach((score, index) => localStorage.setItem(campaignScoreKey(index + 1), String(score)))
+    setCampaignProgress(save.progress); commitCampaignLevel(save.progress)
+    sendLobby(playersRef.current, languageRef.current, difficultyRef.current, gameStyleRef.current, save.progress)
+    return true
+  }
   const startGame = () => {
     const active = playersRef.current.filter((player) => player.connected).slice(0, 4)
     if (!isHost || active.length < 2) return
@@ -187,7 +223,7 @@ function App() {
   }
 
   if (screen === 'home') return <Home language={language} onLanguage={chooseLanguage} onCreate={createSession} />
-  if (screen === 'lobby') return <Lobby players={players} isHost={isHost} status={ui(language).status[status]} copied={copied} language={language} difficulty={difficulty} gameStyle={gameStyle} campaignLevelId={campaignLevelId} campaignProgress={campaignProgress} onLanguage={chooseLanguage} onDifficulty={chooseDifficulty} onGameStyle={chooseGameStyle} onCampaignLevel={chooseCampaignLevel} onCopy={copyInvite} onStart={startGame} onLeave={leaveSession} />
+  if (screen === 'lobby') return <Lobby players={players} isHost={isHost} status={ui(language).status[status]} copied={copied} language={language} difficulty={difficulty} gameStyle={gameStyle} campaignLevelId={campaignLevelId} campaignProgress={campaignProgress} recoveryCode={createRecoveryCode(campaignProgress)} onRestoreCampaign={restoreCampaign} onLanguage={chooseLanguage} onDifficulty={chooseDifficulty} onGameStyle={chooseGameStyle} onCampaignLevel={chooseCampaignLevel} onCopy={copyInvite} onStart={startGame} onLeave={leaveSession} />
   if (!view) return <Loading status={ui(language).status[status]} />
   if (view.outcome !== 'playing') return <EndScreen view={view} isHost={isHost} bestScore={bestScore} newBest={newBest} onReplay={startGame} onNextCampaign={startNextCampaignLevel} onLeave={leaveSession} />
   return <GameScreen view={view} players={players} onAction={submitAction} onLeave={leaveSession} />
@@ -207,7 +243,7 @@ function Home({ language, onLanguage, onCreate }: { language: Locale; onLanguage
     </section><section className="how-grid">{t.how.map(([title, body], index) => <article key={title}><span className="step">0{index + 1}</span><h3>{title}</h3><p>{body}</p></article>)}</section></main>
 }
 
-function Lobby(props: { players: Player[]; isHost: boolean; status: string; copied: boolean; language: Locale; difficulty: DifficultyId; gameStyle: GameStyle; campaignLevelId: number; campaignProgress: number; onLanguage: (language: Locale) => void; onDifficulty: (difficulty: DifficultyId) => void; onGameStyle: (style: GameStyle) => void; onCampaignLevel: (level: number) => void; onCopy: () => void; onStart: () => void; onLeave: () => void }) {
+function Lobby(props: { players: Player[]; isHost: boolean; status: string; copied: boolean; language: Locale; difficulty: DifficultyId; gameStyle: GameStyle; campaignLevelId: number; campaignProgress: number; recoveryCode: string; onRestoreCampaign: (code: string) => boolean; onLanguage: (language: Locale) => void; onDifficulty: (difficulty: DifficultyId) => void; onGameStyle: (style: GameStyle) => void; onCampaignLevel: (level: number) => void; onCopy: () => void; onStart: () => void; onLeave: () => void }) {
   const t = ui(props.language); const canStart = props.isHost && props.players.filter((player) => player.connected).length >= 2
   const selectedLevel = campaignLevel(props.campaignLevelId)
   const settings = props.gameStyle === 'fast' ? difficultyConfig[props.difficulty] : selectedLevel.rules
@@ -216,19 +252,53 @@ function Lobby(props: { players: Player[]; isHost: boolean; status: string; copi
     <div className="invite-box"><div><small>{t.invite}</small><code>{location.href}</code></div><button className="secondary" onClick={props.onCopy}>{props.copied ? t.copied : t.copy}</button></div>
     <div className="language-row"><div><small>{t.language}</small><p>{t.languageHelp}</p></div><LanguageSelector language={props.language} onChange={props.onLanguage} disabled={!props.isHost} /></div>
     <div className="style-row"><div><small>{t.gameStyle}</small><p>{props.gameStyle === 'fast' ? t.fastHelp : t.campaignHelp}</p></div><div className="style-selector"><button className={props.gameStyle === 'fast' ? 'selected' : ''} onClick={() => props.onGameStyle('fast')} disabled={!props.isHost}>{t.fastGame}</button><button className={props.gameStyle === 'campaign' ? 'selected' : ''} onClick={() => props.onGameStyle('campaign')} disabled={!props.isHost}>{t.campaign}</button></div></div>
-    {props.gameStyle === 'fast' ? <div className="difficulty-row"><div><small>{t.difficulty}</small><p>{Math.round(settings.durationMs / 60000)} {t.minutes} · −{settings.pressureDamage} {t.stabilityEvery} {settings.pressureEveryMs / 1000}s · ×{settings.scoreMultiplier} {t.score}<br />{t.scoringHelp}</p></div><div className="difficulty-selector">{(['training', 'standard', 'emergency'] as DifficultyId[]).map(level => <button key={level} className={props.difficulty === level ? 'selected' : ''} onClick={() => props.onDifficulty(level)} disabled={!props.isHost}>{difficultyLabel(level, props.language)}</button>)}</div></div> : <CampaignMap language={props.language} selected={props.campaignLevelId} unlocked={props.campaignProgress} isHost={props.isHost} onSelect={props.onCampaignLevel} />}
+    {props.gameStyle === 'fast' ? <div className="difficulty-row"><div><small>{t.difficulty}</small><p>{Math.round(settings.durationMs / 60000)} {t.minutes} · −{settings.pressureDamage} {t.stabilityEvery} {settings.pressureEveryMs / 1000}s · ×{settings.scoreMultiplier} {t.score}<br />{t.scoringHelp}</p></div><div className="difficulty-selector">{(['training', 'standard', 'emergency'] as DifficultyId[]).map(level => <button key={level} className={props.difficulty === level ? 'selected' : ''} onClick={() => props.onDifficulty(level)} disabled={!props.isHost}>{difficultyLabel(level, props.language)}</button>)}</div></div> : <CampaignMap language={props.language} selected={props.campaignLevelId} unlocked={props.campaignProgress} isHost={props.isHost} recoveryCode={props.recoveryCode} onRestore={props.onRestoreCampaign} onSelect={props.onCampaignLevel} />}
     <div className="crew-label"><span>{t.connectedCrew}</span><b>{props.players.filter((p) => p.connected).length} / 4</b></div><div className="crew-grid">{[0, 1, 2, 3].map((index) => { const player = props.players[index]; return <article className={`crew-slot ${player ? 'occupied' : ''}`} key={index}><span className="avatar">{player ? player.name.slice(0, 2).toUpperCase() : '+'}</span><div><h3>{player?.name || t.openChannel}</h3><p>{player ? (player.isHost ? t.hostRole : t.assignedAtLaunch) : t.waitingTech}</p></div>{player && <i className={player.connected ? 'online' : 'offline'} />}</article> })}</div>
     <div className="lobby-footer"><div className="warning"><span>!</span><p><b>{t.voiceRequired}</b><br />{t.voiceHelp}</p></div>{props.isHost ? <button className="primary" disabled={!canStart} onClick={props.onStart}>{t.start} <b>→</b></button> : <p className="waiting">{t.waitingHost} <span>•••</span></p>}</div>
   </section></main>
 }
 
-function CampaignMap({ language, selected, unlocked, isHost, onSelect }: { language: Locale; selected: number; unlocked: number; isHost: boolean; onSelect: (level: number) => void }) {
+function CampaignMap({ language, selected, unlocked, isHost, recoveryCode, onRestore, onSelect }: { language: Locale; selected: number; unlocked: number; isHost: boolean; recoveryCode: string; onRestore: (code: string) => boolean; onSelect: (level: number) => void }) {
   const t = ui(language); const level = campaignLevel(selected); const settings = level.rules
   const moduleLabels = { router: t.quantumRouter, reactor: t.reactorCalibration, translation: t.translationMatrix }
-  return <section className="campaign-map"><div className="campaign-map-heading"><div><small>{t.campaignMap}</small><h2>{t.level} {level.id}: {level.title[language]}</h2></div><span>{level.activeModules.map(module => moduleLabels[module]).join(' · ')}</span></div><div className="campaign-route">{campaignLevels.map(stop => { const locked = stop.id > Math.max(unlocked, selected); const complete = stop.id < unlocked; return <button key={stop.id} className={`${stop.id === selected ? 'selected' : ''} ${complete ? 'complete' : ''}`} disabled={!isHost || locked} onClick={() => onSelect(stop.id)} aria-label={`${t.level} ${stop.id}: ${stop.title[language]}${locked ? ` (${t.locked})` : ''}`}><b>{complete ? '✓' : locked ? '×' : stop.id}</b><span>{stop.title[language]}</span></button> })}</div><div className="campaign-brief"><p>{level.summary[language]}</p><small>{Math.round(settings.durationMs / 60000)} {t.minutes} · −{settings.pressureDamage} {t.stabilityEvery} {settings.pressureEveryMs / 1000}s · ×{settings.scoreMultiplier} {t.score}</small></div></section>
+  return <section className="campaign-map"><div className="campaign-map-heading"><div><small>{t.campaignMap}</small><h2>{t.level} {level.id}: {level.title[language]}</h2></div><span>{level.activeModules.map(module => moduleLabels[module]).join(' · ')}</span></div><div className="campaign-route">{campaignLevels.map(stop => { const locked = stop.id > Math.max(unlocked, selected); const complete = stop.id < unlocked; return <button key={stop.id} className={`${stop.id === selected ? 'selected' : ''} ${complete ? 'complete' : ''}`} disabled={!isHost || locked} onClick={() => onSelect(stop.id)} aria-label={`${t.level} ${stop.id}: ${stop.title[language]}${locked ? ` (${t.locked})` : ''}`}><b>{complete ? '✓' : locked ? '×' : stop.id}</b><span>{stop.title[language]}</span></button> })}</div><div className="campaign-brief"><div><strong>{level.summary[language]}</strong><p>{level.briefing[language]}</p></div><small>{Math.round(settings.durationMs / 60000)} {t.minutes} · −{settings.pressureDamage} {t.stabilityEvery} {settings.pressureEveryMs / 1000}s · ×{settings.scoreMultiplier} {t.score}</small></div>{isHost && <CampaignRecovery language={language} code={recoveryCode} onRestore={onRestore} />}</section>
+}
+
+function CampaignRecovery({ language, code, onRestore }: { language: Locale; code: string; onRestore: (code: string) => boolean }) {
+  const t = ui(language); const [input, setInput] = useState(''); const [status, setStatus] = useState<'idle' | 'copied' | 'restored' | 'invalid'>('idle')
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(code) }
+    catch { const textarea = document.createElement('textarea'); textarea.value = code; document.body.append(textarea); textarea.select(); document.execCommand('copy'); textarea.remove() }
+    setStatus('copied')
+  }
+  const restore = () => { const restored = onRestore(input); setStatus(restored ? 'restored' : 'invalid'); if (restored) setInput('') }
+  const message = status === 'copied' ? t.recoveryCopied : status === 'restored' ? t.recoveryRestored : status === 'invalid' ? t.recoveryInvalid : t.recoveryHelp
+  return <div className="campaign-recovery"><div><small>{t.recoveryCode}</small><p>{message}</p></div><div className="recovery-row"><code>{code}</code><button className="secondary" onClick={copy}>{t.copyCode}</button></div><div className="recovery-row"><input value={input} onChange={event => { setInput(event.target.value); setStatus('idle') }} placeholder={t.pasteCode} aria-label={t.pasteCode} /><button className="secondary" disabled={!input.trim()} onClick={restore}>{t.restore}</button></div></div>
 }
 
 function Loading({ status }: { status: string }) { return <main className="loading"><Brand /><div className="loader" /><p>{status}</p></main> }
+
+function CampaignStory({ view }: { view: GameView }) {
+  if (view.gameStyle !== 'campaign' || !view.campaignLevel) return null
+  const t = ui(view.language); const level = campaignLevel(view.campaignLevel)
+  return <aside className="campaign-story"><small>{t.missionBriefing} // {t.level} {level.id}</small><strong>{level.title[view.language]}</strong><p>{level.briefing[view.language]}</p></aside>
+}
+
+function puzzleInstruction(view: GameView, module: 'router' | 'reactor' | 'translation', fallback: string) {
+  if (view.gameStyle !== 'campaign' || !view.campaignLevel) return fallback
+  const title = campaignLevel(view.campaignLevel).title[view.language]
+  const caller = view.operator?.router.species || (view.language === 'de' ? 'den Anrufer' : 'the caller')
+  const text = view.language === 'de' ? {
+    router: `Öffnet in „${title}“ einen sicheren Korridor für ${caller}. Fragt nach Protokoll, Frequenzband und Affinität, dann wählt zwei Knoten.`,
+    reactor: `Haltet die Mission „${title}“ am Leben. Lasst euch die drei Zielwerte berechnen, stellt die Regler ein und startet die Kalibrierung.`,
+    translation: 'Die fremde Nachricht könnte die Geschichte verändern. Erfragt Leserichtung, Glyphenkategorien und Stationszustand, dann sendet die drei Farben.',
+  } : {
+    router: `Open a safe corridor through “${title}” for ${caller}. Ask for protocol, frequency band, and affinity, then choose two nodes.`,
+    reactor: `Keep “${title}” alive. Have the crew calculate all three target values, set the dials, and engage calibration.`,
+    translation: 'The alien message may change the story. Ask for reading direction, glyph categories, and station condition, then send three colors.',
+  }
+  return text[module]
+}
 
 function GameScreen({ view, players, onAction, onLeave }: { view: GameView; players: Player[]; onAction: (action: GameActionInput) => void; onLeave: () => void }) {
   const t = ui(view.language); const role = view.manual?.role || players.find((player) => player.isHost)?.role || null
@@ -241,11 +311,12 @@ function ModuleHeader({ number, title, resolved, tone, language }: { number: str
 }
 
 function OperatorConsole({ view, onAction }: { view: GameView; onAction: (action: GameActionInput) => void }) {
-  const t = ui(view.language); const data = view.operator!
+  const base = ui(view.language); const data = view.operator!
+  const t = { ...base, selectNodes: puzzleInstruction(view, 'router', base.selectNodes), setDials: puzzleInstruction(view, 'reactor', base.setDials), enterSequence: puzzleInstruction(view, 'translation', base.enterSequence) }
   const [nodes, setNodes] = useState<string[]>([]); const [dials, setDials] = useState<[number, number, number]>(data.reactor.dials); const [sequence, setSequence] = useState<ButtonColor[]>([])
   const toggleNode = (id: string) => setNodes((current) => current.includes(id) ? current.filter((node) => node !== id) : current.length < 2 ? [...current, id] : [current[1], id])
   const adjust = (index: number, delta: number) => setDials((current) => current.map((value, i) => i === index ? (value + delta + 6) % 6 : value) as [number, number, number])
-  return <div className="game-content"><div className="role-banner"><div><p className="kicker">{t.assignment}</p><h1>{t.operatorConsole}</h1></div><p>{t.operatorSubtitle}<br /><b>{t.describe}</b></p></div><section className={`module-grid modules-${view.activeModules.length}`}>
+  return <div className="game-content"><div className="role-banner"><div><p className="kicker">{t.assignment}</p><h1>{t.operatorConsole}</h1></div><p>{t.operatorSubtitle}<br /><b>{t.describe}</b></p></div><CampaignStory view={view} /><section className={`module-grid modules-${view.activeModules.length}`}>
     {view.activeModules.includes('router') && <article data-resolved={t.resolved} className={`module-card router-card ${data.router.resolved ? 'resolved' : ''}`}><ModuleHeader number="01" title={t.quantumRouter} resolved={data.router.resolved} tone="mint" language={view.language} /><div className="caller-strip"><span>{t.incomingCaller}</span><strong>{data.router.species}</strong></div><p className="instruction">{t.selectNodes}</p><div className="node-map">{data.router.nodes.map((node, index) => <button key={node.id} disabled={data.router.resolved} onClick={() => toggleNode(node.id)} className={`node node-${index} ${nodes.includes(node.id) ? 'selected' : ''}`}><b>{symbolMeta[node.symbol].glyph}</b><span>{node.code}</span></button>)}<div className="map-core">{t.routeCore[0]}<br />{t.routeCore[1]}</div></div><button className="module-submit mint" disabled={nodes.length !== 2 || data.router.resolved} onClick={() => { onAction({ type: 'router-connect', a: nodes[0], b: nodes[1] }); setNodes([]) }}>{t.lockConnection}</button></article>}
     {view.activeModules.includes('reactor') && <article data-resolved={t.resolved} className={`module-card reactor-card ${data.reactor.resolved ? 'resolved' : ''}`}><ModuleHeader number="02" title={t.reactorCalibration} resolved={data.reactor.resolved} tone="orange" language={view.language} /><div className="reactor-visual"><div className="reactor-core"><i /><span>{t.core}</span></div><div className="reactor-lights"><i /><i /><i /></div></div><p className="instruction">{t.setDials}</p><div className="dials">{dials.map((value, index) => <div className="dial-control" key={index}><span>{t.dial} {String.fromCharCode(65 + index)}</span><button onClick={() => adjust(index, 1)} disabled={data.reactor.resolved} aria-label={`${t.increaseDial} ${index + 1}`}>⌃</button><strong>{value}</strong><button onClick={() => adjust(index, -1)} disabled={data.reactor.resolved} aria-label={`${t.decreaseDial} ${index + 1}`}>⌄</button></div>)}</div><button className="module-submit orange" disabled={data.reactor.resolved} onClick={() => onAction({ type: 'reactor-calibrate', dials })}>{t.engage}</button></article>}
     {view.activeModules.includes('translation') && <article data-resolved={t.resolved} className={`module-card translation-card ${data.translation.resolved ? 'resolved' : ''}`}><ModuleHeader number="03" title={t.translationMatrix} resolved={data.translation.resolved} tone="pink" language={view.language} /><div className="alien-message"><span>{t.messageBuffer}</span><div>{data.translation.glyphs.map((glyph, index) => <b key={index}>{symbolMeta[glyph].glyph}</b>)}</div></div><p className="instruction">{t.enterSequence}</p><div className="sequence-readout">{[0, 1, 2].map((index) => <i key={index} className={sequence[index] ? `color-${sequence[index]}` : ''}>{sequence[index] ? index + 1 : '·'}</i>)}</div><div className="color-buttons">{colors.map((color) => <button aria-label={buttonLabel(color, view.language)} disabled={sequence.length >= 3 || data.translation.resolved} onClick={() => setSequence((current) => [...current, color])} key={color} className={`color-${color}`} />)}</div><div className="translation-actions"><button className="clear-button" onClick={() => setSequence([])} disabled={data.translation.resolved}>{t.clear}</button><button className="module-submit pink" disabled={sequence.length !== 3 || data.translation.resolved} onClick={() => { onAction({ type: 'translation-submit', sequence }); setSequence([]) }}>{t.transmit}</button></div></article>}

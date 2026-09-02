@@ -106,8 +106,18 @@ nav, .app-shell > header { height: 92px; max-width: 1280px; margin: auto; paddin
 .campaign-route button:disabled { cursor: not-allowed; opacity: .4; }
 .campaign-route button.selected:disabled, .campaign-route button.complete:disabled { opacity: 1; }
 .campaign-brief { border-top: 1px solid #30394c; padding-top: 13px; display: flex; justify-content: space-between; gap: 20px; }
-.campaign-brief p { margin: 0; color: #a1a8b7; font-size: 12px; }
+.campaign-brief > div { max-width: 720px; }
+.campaign-brief strong { display: block; margin-bottom: 5px; color: var(--paper); font-size: 13px; }
+.campaign-brief p { margin: 0; color: #a1a8b7; font-size: 12px; line-height: 1.5; }
 .campaign-brief small { color: #747d91; font: 9px 'DM Mono'; text-align: right; }
+.campaign-recovery { margin-top: 16px; padding-top: 14px; border-top: 1px solid #30394c; display: grid; gap: 9px; }
+.campaign-recovery > div:first-child { display: flex; justify-content: space-between; gap: 16px; }
+.campaign-recovery small { color: var(--mint); font: 9px 'DM Mono'; letter-spacing: .12em; }
+.campaign-recovery p { margin: 0; color: #858da0; font-size: 11px; }
+.recovery-row { display: flex; gap: 8px; }
+.recovery-row code, .recovery-row input { min-width: 0; flex: 1; padding: 10px 12px; border: 1px solid #343e53; background: #070b14; color: #c4cad7; font: 10px 'DM Mono'; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recovery-row input:focus { border-color: var(--mint); outline: none; }
+.recovery-row .secondary { flex: 0 0 auto; padding: 0 13px; }
 .secondary { min-height: 42px; background: transparent; color: var(--paper); border: 1px solid #657088; padding: 0 18px; }
 .crew-label { margin: 35px 0 12px; display: flex; justify-content: space-between; }
 .crew-label b { color: var(--paper); }
@@ -151,6 +161,10 @@ nav, .app-shell > header { height: 92px; max-width: 1280px; margin: auto; paddin
 .role-banner h1 { font-size: 32px; margin: 0; letter-spacing: -.03em; }
 .role-banner p:last-child { margin: 0; color: #858c9f; text-align: right; font-size: 13px; line-height: 1.55; }
 .role-banner p:last-child b { color: var(--paper); }
+.campaign-story { margin: -10px 0 24px; padding: 15px 18px; border: 1px solid #65445f; border-left: 3px solid var(--pink); background: linear-gradient(90deg, rgba(255, 79, 167, .09), rgba(255, 79, 167, .02)); }
+.campaign-story small { display: block; color: var(--pink); font: 9px 'DM Mono'; letter-spacing: .12em; }
+.campaign-story strong { display: block; margin-top: 6px; color: var(--paper); font-size: 17px; }
+.campaign-story p { max-width: 850px; margin: 4px 0 0; color: #aeb4c2; font-size: 13px; line-height: 1.5; }
 .module-grid { display: grid; grid-template-columns: 1.08fr 1fr 1fr; gap: 14px; }
 .module-grid.modules-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .module-grid.modules-1 { grid-template-columns: minmax(320px, 520px); justify-content: center; }

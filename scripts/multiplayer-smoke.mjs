@@ -81,8 +81,8 @@ try {
   const host = await launchBrowser(9331)
   await host.send('Runtime.enable')
   await host.navigate(`http://localhost:${appPort}/`)
-  await waitFor(() => host.eval('document.body.innerText.includes("CREATE GAME")'), 'home screen')
-  await host.eval('[...document.querySelectorAll("button")].find(b => b.textContent.includes("CREATE GAME")).click()')
+  await waitFor(() => host.eval('document.documentElement.lang === "de" && document.body.innerText.includes("SPIEL ERSTELLEN")'), 'German home screen')
+  await host.eval('[...document.querySelectorAll("button")].find(b => b.textContent.includes("SPIEL ERSTELLEN")).click()')
   const invite = await waitFor(async () => {
     const url = await host.eval('location.href')
     return url.includes('#session=') ? url : false
