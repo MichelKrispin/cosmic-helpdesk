@@ -167,6 +167,9 @@ nav, .app-shell > header { height: 92px; max-width: 1280px; margin: auto; paddin
 .campaign-story small { display: block; color: var(--pink); font: 9px 'DM Mono'; letter-spacing: .12em; }
 .campaign-story strong { display: block; margin-top: 6px; color: var(--paper); font-size: 17px; }
 .campaign-story p { max-width: 850px; margin: 4px 0 0; color: #aeb4c2; font-size: 13px; line-height: 1.5; }
+.campaign-story .mission-modifier { margin-top: 10px; color: var(--orange); font-weight: 700; }
+.campaign-story .mission-bonus { color: var(--mint); }
+.campaign-story .mission-hint { margin-top: 10px; padding-top: 9px; border-top: 1px solid #65445f; color: var(--paper); }
 .module-grid { display: grid; grid-template-columns: 1.08fr 1fr 1fr; gap: 14px; }
 .module-grid.modules-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .module-grid.modules-1 { grid-template-columns: minmax(320px, 520px); justify-content: center; }

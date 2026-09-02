@@ -281,7 +281,7 @@ function Loading({ status }: { status: string }) { return <main className="loadi
 function CampaignStory({ view }: { view: GameView }) {
   if (view.gameStyle !== 'campaign' || !view.campaignLevel) return null
   const t = ui(view.language); const level = campaignLevel(view.campaignLevel)
-  return <aside className="campaign-story"><small>{t.missionBriefing} // {t.level} {level.id}</small><strong>{level.title[view.language]}</strong><p>{level.briefing[view.language]}</p></aside>
+  return <aside className="campaign-story"><small>{t.missionBriefing} // {t.level} {level.id}</small><strong>{level.title[view.language]}</strong><p>{level.briefing[view.language]}</p>{view.modifierText && <p className="mission-modifier">⚠ {view.modifierText}</p>}{view.bonusText && <p className="mission-bonus">★ {view.bonusText}</p>}{view.hint && <p className="mission-hint">→ {view.hint}</p>}</aside>
 }
 
 function puzzleInstruction(view: GameView, module: 'router' | 'reactor' | 'translation', fallback: string) {

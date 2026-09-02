@@ -65,6 +65,7 @@ No database, gameplay relay, voice chat, account, or analytics is used. PeerJS's
 
 - Fast Game is the original complete three-system challenge with selectable difficulty.
 - Campaign is the default mode and follows a sixteen-level story map. It starts with one system, introduces the others gradually, then unlocks additional procedures, palettes, reading directions, and stronger pressure. Campaign progress and per-level best scores are saved automatically in the host browser. The campaign lobby can copy a checksummed recovery code and restore it in another browser; an interrupted level restarts from its beginning.
+- Campaign chapters 1–3 include worked guidance, a timed hint after 40 seconds, and one damage-free training mistake per puzzle in chapters 1–2. From chapter 7 onward, each run announces a procedural modifier and an optional 500-point objective; later chapters draw from increasingly varied modifiers.
 - A deterministic seed creates the caller species, glyphs, telemetry, node layout, and valid solutions.
 - The host selects Training, Standard, or Emergency. Harder shifts are shorter, apply stronger recurring stability damage, and award larger score multipliers.
 - A shift is won only by resolving every active incident. Running out of time or stability loses the shift.
