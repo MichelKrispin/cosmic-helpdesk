@@ -58,8 +58,8 @@ function readRecoveryCode(code: string) {
   const scoreParts = match[2].split('.')
   const scores = scoreParts.map(score => Number.parseInt(score, 36))
   const payload = `1|${match[1]}|${match[2]}`
-  if (campaignChecksum(payload).toLowerCase() !== match[3] || !Number.isInteger(progress) || progress < 1 || progress > campaignLevels.length || scores.length !== campaignLevels.length || scores.some(score => !Number.isSafeInteger(score) || score < 0)) return null
-  return { progress, scores }
+  if (campaignChecksum(payload).toLowerCase() !== match[3] || !Number.isInteger(progress) || progress < 1 || progress > campaignLevels.length || scores.length > campaignLevels.length || scores.some(score => !Number.isSafeInteger(score) || score < 0)) return null
+  return { progress, scores: [...scores, ...Array(campaignLevels.length - scores.length).fill(0)] }
 }
 
 function App() {
@@ -71,7 +71,7 @@ function App() {
   const [view, setView] = useState<GameView | null>(null)
   const [language, setLanguage] = useState<Locale>('de')
   const [difficulty, setDifficulty] = useState<DifficultyId>('standard')
-  const [gameStyle, setGameStyle] = useState<GameStyle>('fast')
+  const [gameStyle, setGameStyle] = useState<GameStyle>('campaign')
   const [campaignLevelId, setCampaignLevelId] = useState(1)
   const [campaignProgress, setCampaignProgress] = useState(() => Math.max(1, Math.min(campaignLevels.length, Number(localStorage.getItem(campaignProgressKey)) || 1)))
   const [copied, setCopied] = useState(false)
@@ -84,7 +84,7 @@ function App() {
   const playersRef = useRef<Player[]>([])
   const languageRef = useRef<Locale>('de')
   const difficultyRef = useRef<DifficultyId>('standard')
-  const gameStyleRef = useRef<GameStyle>('fast')
+  const gameStyleRef = useRef<GameStyle>('campaign')
   const campaignLevelRef = useRef(1)
   const sessionRef = useRef<{ sessionId: string; hostId: string } | null>(initialInvite)
   const processedRef = useRef(new Set<string>())
