@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  advanceClock, applyAction, buttonLabel, campaignLevel, campaignLevels, createGame, difficultyConfig, difficultyLabel, roleName, rolesForPlayers, symbolMeta, viewForRole,
+  advanceClock, applyAction, buttonLabel, buttonMarker, campaignLevel, campaignLevels, createGame, difficultyConfig, difficultyLabel, roleName, rolesForPlayers, symbolMeta, viewForRole,
   type ButtonColor, type DifficultyId, type FullGame, type GameAction, type GameActionInput, type GameStyle, type GameView, type Locale, type Player, type RoleId,
 } from './game'
 import { ui, type StatusId } from './i18n'
 import { makeId, PeerMesh, type MeshEvent } from './network'
+import { reconnectOrAddPlayer } from './session'
 
 type Screen = 'home' | 'lobby' | 'briefing' | 'game'
 type AppMessage =
@@ -93,12 +94,14 @@ function App() {
   const campaignLevelRef = useRef(1)
   const sessionRef = useRef<{ sessionId: string; hostId: string } | null>(initialInvite)
   const processedRef = useRef(new Set<string>())
+  const screenRef = useRef<Screen>(initialInvite ? 'lobby' : 'home')
 
   const commitPlayers = useCallback((next: Player[]) => { playersRef.current = next; setPlayers(next) }, [])
   const commitLanguage = useCallback((next: Locale) => { languageRef.current = next; setLanguage(next) }, [])
   const commitDifficulty = useCallback((next: DifficultyId) => { difficultyRef.current = next; setDifficulty(next) }, [])
   const commitGameStyle = useCallback((next: GameStyle) => { gameStyleRef.current = next; setGameStyle(next) }, [])
   const commitCampaignLevel = useCallback((next: number) => { campaignLevelRef.current = next; setCampaignLevelId(next) }, [])
+  const commitScreen = useCallback((next: Screen) => { screenRef.current = next; setScreen(next) }, [])
   const sendLobby = useCallback((next = playersRef.current, nextLanguage = languageRef.current, nextDifficulty = difficultyRef.current, nextStyle = gameStyleRef.current, nextLevel = campaignLevelRef.current) => {
     meshRef.current?.broadcast((): AppMessage => ({ type: 'lobby', players: next, language: nextLanguage, difficulty: nextDifficulty, gameStyle: nextStyle, campaignLevel: nextLevel }))
   }, [])
@@ -123,11 +126,15 @@ function App() {
     if (event.type === 'peer-open') {
       setStatus('connected')
       if (isHostRef.current) {
-        if (playersRef.current.some((player) => player.id === event.peerId)) return
-        if (playersRef.current.length >= 4 || gameRef.current) { meshRef.current?.send(event.peerId, { type: 'capacity' } satisfies AppMessage); return }
-        const next = [...playersRef.current, { id: event.peerId, name: event.name, role: null, connected: true, isHost: false }]
-        commitPlayers(next)
-        queueMicrotask(() => sendLobby(next))
+        const existing = playersRef.current.find((player) => player.id === event.peerId)
+        if (!existing && gameRef.current) { meshRef.current?.send(event.peerId, { type: 'capacity' } satisfies AppMessage); return }
+        const result = reconnectOrAddPlayer(playersRef.current, { id: event.peerId, name: event.name, role: existing?.role || null, connected: true, isHost: false })
+        if (!result.accepted) { meshRef.current?.send(event.peerId, { type: 'capacity' } satisfies AppMessage); return }
+        commitPlayers(result.players)
+        if (gameRef.current && existing?.role) {
+          const phase = screenRef.current === 'briefing' ? 'briefing' : 'game'
+          meshRef.current?.send(event.peerId, { type: 'state', view: viewForRole(gameRef.current, existing.role), phase } satisfies AppMessage)
+        } else queueMicrotask(() => sendLobby(result.players))
       }
       return
     }
@@ -140,21 +147,21 @@ function App() {
     const message = event.data as AppMessage
     if (isHostRef.current && message.type === 'action') { const sender = playersRef.current.find((player) => player.id === event.peerId); if (sender?.role === 'operator') handleAction(message.action); return }
     if (!isHostRef.current && message.type === 'lobby') { commitPlayers(message.players); commitLanguage(message.language); commitDifficulty(message.difficulty); commitGameStyle(message.gameStyle); commitCampaignLevel(message.campaignLevel); setStatus('connected') }
-    if (!isHostRef.current && message.type === 'state') { setView(message.view); commitLanguage(message.view.language); setScreen(message.phase || 'game') }
-    if (!isHostRef.current && message.type === 'session-ended') { setStatus('sessionEnded'); setScreen('lobby') }
+    if (!isHostRef.current && message.type === 'state') { setView(message.view); commitLanguage(message.view.language); commitScreen(message.phase || 'game') }
+    if (!isHostRef.current && message.type === 'session-ended') { setStatus('sessionEnded'); commitScreen('lobby') }
     if (!isHostRef.current && message.type === 'capacity') setStatus('capacity')
-  }, [commitCampaignLevel, commitDifficulty, commitGameStyle, commitLanguage, commitPlayers, handleAction, sendLobby])
+  }, [commitCampaignLevel, commitDifficulty, commitGameStyle, commitLanguage, commitPlayers, commitScreen, handleAction, sendLobby])
 
   const createSession = useCallback(() => {
     meshRef.current?.close()
     const sessionId = makeId(); const hostId = selfRef.current.id
     sessionRef.current = { sessionId, hostId }
     history.replaceState(null, '', `${location.pathname}${location.search}#session=${sessionId}&host=${hostId}`)
-    setIsHost(true); isHostRef.current = true; setStatus('waiting'); setScreen('lobby')
+    setIsHost(true); isHostRef.current = true; setStatus('waiting'); commitScreen('lobby')
     const roster: Player[] = [{ id: hostId, name: selfRef.current.name, role: null, connected: true, isHost: true }]
     commitPlayers(roster)
     meshRef.current = new PeerMesh({ mode: 'host', sessionId, selfId: hostId, hostId, name: selfRef.current.name, onEvent: handleMeshEvent })
-  }, [commitPlayers, handleMeshEvent])
+  }, [commitPlayers, commitScreen, handleMeshEvent])
 
   useEffect(() => {
     if (!initialInvite || meshRef.current) return
@@ -214,18 +221,18 @@ function App() {
     const game = createGame(seedBytes[0], active.length, languageRef.current, Date.now(), difficultyRef.current, gameStyleRef.current, campaignLevelRef.current)
     setNewBest(false)
     const phase = game.gameStyle === 'campaign' ? 'briefing' : 'game'
-    gameRef.current = game; processedRef.current.clear(); setScreen(phase); hostBroadcastState(game, phase)
+    gameRef.current = game; processedRef.current.clear(); commitScreen(phase); hostBroadcastState(game, phase)
   }
   const beginMission = () => {
     if (!isHost || !gameRef.current) return
     const now = Date.now(); const game = gameRef.current
     game.startedAt = now; game.endsAt = now + game.shiftRules.durationMs; game.lastPressureAt = now
-    setScreen('game'); hostBroadcastState(game, 'game')
+    commitScreen('game'); hostBroadcastState(game, 'game')
   }
   const startNextCampaignLevel = () => { commitCampaignLevel(Math.min(campaignLevels.length, campaignLevelRef.current + 1)); startGame() }
   const leaveSession = () => {
     if (isHost) meshRef.current?.broadcast((): AppMessage => ({ type: 'session-ended' }))
-    meshRef.current?.close(); meshRef.current = null; gameRef.current = null; setView(null); setPlayers([]); setIsHost(false); setStatus('empty'); setScreen('home')
+    meshRef.current?.close(); meshRef.current = null; gameRef.current = null; setView(null); setPlayers([]); setIsHost(false); setStatus('empty'); commitScreen('home')
     history.replaceState(null, '', `${location.pathname}${location.search}`)
   }
   const submitAction = (action: GameActionInput) => {
@@ -336,7 +343,8 @@ function GameScreen({ view, players, selfId, onAction, onLeave }: { view: GameVi
   const t = ui(view.language); const activePlayer = players.find(player => player.id === selfId); const role = view.manual?.role || activePlayer?.role || players.find((player) => player.isHost)?.role || null
   const modeLabel = view.gameStyle === 'campaign' && view.campaignLevel ? `${t.campaign} · ${t.level} ${view.campaignLevel}` : `${t.fastGame} · ${difficultyLabel(view.difficulty, view.language)}`
   const shiftLabel = `${t.youAre}: ${activePlayer?.name || '—'} · ${roleName(role, view.language)} // ${modeLabel}`
-  return <main className="game-shell"><header className="game-header"><Brand compact /><div className="shift-clock"><span>{shiftLabel} · {t.shiftEnds}</span><strong>{formatTime(view.endsAt - view.now)}</strong></div><div className="score-box"><span>{t.score}</span><strong>{view.score.toLocaleString()}</strong></div><div className="stability"><span>{t.stationStability} <b>{view.stability}%</b></span><div><i style={{ width: `${view.stability}%` }} /></div></div><button className="icon-button" onClick={onLeave} aria-label={t.leaveAria}>×</button></header>{view.operator ? <OperatorConsole view={view} onAction={onAction} /> : <SpecialistConsole view={view} role={role || view.manual?.role || null} />}</main>
+  const surgeSeconds = Math.max(0, Math.ceil((view.nextPressureAt - view.now) / 1000)); const graceSeconds = Math.max(0, Math.ceil(((view.variationGraceUntil || 0) - view.now) / 1000))
+  return <main className="game-shell"><header className="game-header"><Brand compact /><div className="shift-clock"><span>{shiftLabel} · {t.shiftEnds}</span><strong>{formatTime(view.endsAt - view.now)}</strong><small>{graceSeconds > 0 ? `${t.dataLock}: ${graceSeconds}s` : `${t.nextSurge}: ${surgeSeconds}s`}</small></div><div className="score-box"><span>{t.score}</span><strong>{view.score.toLocaleString()}</strong></div><div className="stability"><span>{t.stationStability} <b>{view.stability}%</b></span><div><i style={{ width: `${view.stability}%` }} /></div></div><button className="icon-button" onClick={onLeave} aria-label={t.leaveAria}>×</button></header>{view.operator ? <OperatorConsole view={view} onAction={onAction} /> : <SpecialistConsole view={view} role={role || view.manual?.role || null} />}</main>
 }
 
 function ModuleHeader({ number, title, resolved, tone, language }: { number: string; title: string; resolved: boolean; tone: string; language: Locale }) {
@@ -352,7 +360,7 @@ function OperatorConsole({ view, onAction }: { view: GameView; onAction: (action
   return <div className="game-content"><div className="role-banner"><div><p className="kicker">{t.assignment}</p><h1>{t.operatorConsole}</h1></div><p>{t.operatorSubtitle}<br /><b>{t.describe}</b></p></div><CampaignStory view={view} /><section className={`module-grid modules-${view.activeModules.length}`}>
     {view.activeModules.includes('router') && <article data-resolved={t.resolved} className={`module-card router-card ${data.router.resolved ? 'resolved' : ''}`}><ModuleHeader number="01" title={t.quantumRouter} resolved={data.router.resolved} tone="mint" language={view.language} /><div className="caller-strip"><span>{t.incomingCaller}</span><strong>{data.router.species}</strong></div><p className="instruction">{t.selectNodes}</p><div className="node-map">{data.router.nodes.map((node, index) => <button key={node.id} disabled={data.router.resolved} onClick={() => toggleNode(node.id)} className={`node node-${index} ${nodes.includes(node.id) ? 'selected' : ''}`}><b>{symbolMeta[node.symbol].glyph}</b><span>{node.code}</span></button>)}<div className="map-core">{t.routeCore[0]}<br />{t.routeCore[1]}</div></div><button className="module-submit mint" disabled={nodes.length !== 2 || data.router.resolved} onClick={() => { onAction({ type: 'router-connect', a: nodes[0], b: nodes[1] }); setNodes([]) }}>{t.lockConnection}</button></article>}
     {view.activeModules.includes('reactor') && <article data-resolved={t.resolved} className={`module-card reactor-card ${data.reactor.resolved ? 'resolved' : ''}`}><ModuleHeader number="02" title={t.reactorCalibration} resolved={data.reactor.resolved} tone="orange" language={view.language} /><div className="reactor-visual"><div className="reactor-core"><i /><span>{t.core}</span></div><div className="reactor-lights"><i /><i /><i /></div></div><p className="instruction">{t.setDials}</p><div className="dials">{dials.map((value, index) => <div className="dial-control" key={index}><span>{t.dial} {String.fromCharCode(65 + index)}</span><button onClick={() => adjust(index, 1)} disabled={data.reactor.resolved} aria-label={`${t.increaseDial} ${index + 1}`}>⌃</button><strong>{value}</strong><button onClick={() => adjust(index, -1)} disabled={data.reactor.resolved} aria-label={`${t.decreaseDial} ${index + 1}`}>⌄</button></div>)}</div><button className="module-submit orange" disabled={data.reactor.resolved} onClick={() => onAction({ type: 'reactor-calibrate', dials })}>{t.engage}</button></article>}
-    {view.activeModules.includes('translation') && <article data-resolved={t.resolved} className={`module-card translation-card ${data.translation.resolved ? 'resolved' : ''}`}><ModuleHeader number="03" title={t.translationMatrix} resolved={data.translation.resolved} tone="pink" language={view.language} /><div className="alien-message"><span>{t.messageBuffer}</span><div>{data.translation.glyphs.map((glyph, index) => <b key={index}>{symbolMeta[glyph].glyph}</b>)}</div></div><p className="instruction">{t.enterSequence}</p><div className="sequence-readout">{[0, 1, 2].map((index) => <i key={index} className={sequence[index] ? `color-${sequence[index]}` : ''}>{sequence[index] ? index + 1 : '·'}</i>)}</div><div className="color-buttons">{colors.map((color) => <button aria-label={buttonLabel(color, view.language)} disabled={sequence.length >= 3 || data.translation.resolved} onClick={() => setSequence((current) => [...current, color])} key={color} className={`color-${color}`} />)}</div><div className="translation-actions"><button className="clear-button" onClick={() => setSequence([])} disabled={data.translation.resolved}>{t.clear}</button><button className="module-submit pink" disabled={sequence.length !== 3 || data.translation.resolved} onClick={() => { onAction({ type: 'translation-submit', sequence }); setSequence([]) }}>{t.transmit}</button></div></article>}
+    {view.activeModules.includes('translation') && <article data-resolved={t.resolved} className={`module-card translation-card ${data.translation.resolved ? 'resolved' : ''}`}><ModuleHeader number="03" title={t.translationMatrix} resolved={data.translation.resolved} tone="pink" language={view.language} /><div className="alien-message"><span>{t.messageBuffer}</span><div>{data.translation.glyphs.map((glyph, index) => <b key={index}>{symbolMeta[glyph].glyph}</b>)}</div></div><p className="instruction">{t.enterSequence}</p><div className="sequence-readout">{[0, 1, 2].map((index) => <i key={index} className={sequence[index] ? `color-${sequence[index]}` : ''}>{sequence[index] ? buttonMarker(sequence[index]) : '·'}</i>)}</div><div className="color-buttons">{colors.map((color) => <button aria-label={buttonLabel(color, view.language)} disabled={sequence.length >= 3 || data.translation.resolved} onClick={() => setSequence((current) => [...current, color])} key={color} className={`color-${color}`}><b>{buttonMarker(color)}</b><small>{buttonLabel(color, view.language)}</small></button>)}</div><div className="translation-actions"><button className="clear-button" onClick={() => setSequence([])} disabled={data.translation.resolved}>{t.clear}</button><button className="module-submit pink" disabled={sequence.length !== 3 || data.translation.resolved} onClick={() => { onAction({ type: 'translation-submit', sequence }); setSequence([]) }}>{t.transmit}</button></div></article>}
   </section><EventLog view={view} /></div>
 }
 

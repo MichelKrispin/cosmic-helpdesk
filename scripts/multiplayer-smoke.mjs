@@ -131,16 +131,18 @@ try {
     const panels = [...document.querySelectorAll('.manual-panel')]
     const archive = panels.find(panel => panel.querySelector('h2')?.textContent === 'Archivkarte 88-B')
     const procedure = panels.find(panel => panel.querySelector('h2')?.textContent === 'Kategorie in Farbe umwandeln')
-    const categories = [...archive.querySelectorAll('.data-rows > div')].map(row => row.querySelector('strong').textContent)
+    const categoriesByGlyph = Object.fromEntries([...archive.querySelectorAll('.data-rows > div')].map(row => [row.querySelector('span').textContent.trim().split(/\\s+/)[0], row.querySelector('strong').textContent]))
     const map = Object.fromEntries([...procedure.querySelectorAll('tbody tr')].map(row => {
       const cells = [...row.querySelectorAll('td')].map(cell => cell.textContent)
       return [cells[0], cells[1]]
     }))
     const reverse = procedure.querySelector('.manual-panel-heading span').textContent.includes('rechts nach links')
-    return { categories, map, reverse }
+    return { categoriesByGlyph, map, reverse }
   })()`)
+  const messageGlyphs = await host.eval(`[...document.querySelectorAll('.alien-message b')].map(node => node.textContent)`)
   const colorIds = { BERNSTEIN: 'amber', CYAN: 'cyan', MAGENTA: 'magenta', LIMETTE: 'lime' }
-  const orderedCategories = translationData.reverse ? [...translationData.categories].reverse() : translationData.categories
+  const messageCategories = messageGlyphs.map((glyph) => translationData.categoriesByGlyph[glyph])
+  const orderedCategories = translationData.reverse ? [...messageCategories].reverse() : messageCategories
   const response = orderedCategories.map((category) => colorIds[translationData.map[category].trim().split(/\s+/).at(-1)])
   await host.eval(`(() => { const colors = ${JSON.stringify(response)}; colors.forEach(color => document.querySelector('.color-buttons .color-' + color).click()) })()`)
   await delay(250)
@@ -176,9 +178,14 @@ try {
   await host.eval('[...document.querySelectorAll("button")].find(b => b.textContent.includes("NEUE SCHICHT")).click()')
   await waitFor(() => host.eval('document.body.innerText.includes("Operatorkonsole") && !document.body.innerText.includes("Technisch gesehen ein Erfolg")'), 'host replay')
   await waitFor(() => client.eval('document.body.innerText.includes("Missionsspezialist") && !document.body.innerText.includes("Technisch gesehen ein Erfolg")'), 'client replay')
+  await host.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 800, deviceScaleFactor: 1, mobile: true })
+  await client.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 800, deviceScaleFactor: 1, mobile: true })
+  const hostOverflow = await host.eval('document.documentElement.scrollWidth > window.innerWidth')
+  const clientOverflow = await client.eval('document.documentElement.scrollWidth > window.innerWidth')
+  if (hostOverflow || clientOverflow) throw new Error(`Horizontal overflow at 320px: host=${hostOverflow}, client=${clientOverflow}`)
   if (host.errors.length || client.errors.length) throw new Error(`Browser exceptions: ${[...host.errors, ...client.errors].join(', ')}`)
   host.close(); client.close()
-  console.log('Two-browser WebRTC smoke test passed: shared German/Emergency settings, varied procedures, score, win state, and synchronized replay.')
+  console.log('Two-browser WebRTC smoke test passed: shared settings, varied procedures, win/replay sync, and 320px layouts.')
 } finally {
   for (const child of children.reverse()) child.kill('SIGTERM')
 }

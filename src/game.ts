@@ -15,6 +15,8 @@ export type FullGame = {
   seed: number; playerCount: number; language: Locale; gameStyle: GameStyle; campaignLevel?: number; difficulty: DifficultyId; shiftRules: ShiftRules; activeModules: ModuleId[]; startedAt: number; endsAt: number; lastPressureAt: number; completedAt?: number
   stability: number; incidentsResolved: number; incorrectActions: number; damagedSystems: number
   unauthorizedWormholes: number; score: number; outcome: 'playing' | 'won' | 'lost'; endReason?: string; log: string[]; modifier: CampaignModifier; bonusObjective?: BonusObjective; forgivenModules: ModuleId[]
+  targetIncidents: number; followUpModule?: ModuleId; followUpTriggered: boolean
+  variationGrace?: { until: number; router?: [SymbolId, SymbolId]; reactor?: [number, number, number]; translation?: ButtonColor[] }
   router: { resolved: boolean; nodes: { id: string; symbol: SymbolId; code: string }[]; species: string; affinity: 'angular' | 'curved'; baseFrequency: number; protocol: RouterProtocol }
   reactor: { resolved: boolean; dials: [number, number, number]; telemetry: { flux: number; phase: number; coolant: number }; speciesOffset: number; formula: ReactorFormula }
   translation: { resolved: boolean; glyphs: SymbolId[]; sequence: ButtonColor[]; paletteShift: number; direction: 'forward' | 'reverse' }
@@ -35,7 +37,7 @@ export type RoleView = {
 }
 
 export type GameView = {
-  seed: number; language: Locale; gameStyle: GameStyle; campaignLevel?: number; difficulty: DifficultyId; activeModules: ModuleId[]; targetIncidents: number; now: number; endsAt: number; stability: number; score: number; incidentsResolved: number
+  seed: number; language: Locale; gameStyle: GameStyle; campaignLevel?: number; difficulty: DifficultyId; activeModules: ModuleId[]; targetIncidents: number; now: number; endsAt: number; nextPressureAt: number; variationGraceUntil?: number; stability: number; score: number; incidentsResolved: number
   incorrectActions: number; damagedSystems: number; unauthorizedWormholes: number; outcome: FullGame['outcome']
   endReason?: string; log: string[]; moduleStatus: { router: boolean; reactor: boolean; translation: boolean }; modifierText?: string; bonusText?: string; hint?: string
   operator?: { router: Omit<FullGame['router'], 'affinity' | 'baseFrequency' | 'protocol'>; reactor: Omit<FullGame['reactor'], 'telemetry' | 'speciesOffset' | 'formula'>; translation: Omit<FullGame['translation'], 'sequence' | 'paletteShift' | 'direction'> }
@@ -137,6 +139,9 @@ export function symbolLabel(symbol: SymbolId, language: Locale) { return { glyph
 export function buttonLabel(color: ButtonColor, language: Locale): string {
   return ({ en: { amber: 'AMBER', cyan: 'CYAN', magenta: 'MAGENTA', lime: 'LIME' }, de: { amber: 'BERNSTEIN', cyan: 'CYAN', magenta: 'MAGENTA', lime: 'LIMETTE' } } as Record<Locale, Record<ButtonColor, string>>)[language][color]
 }
+export function buttonMarker(color: ButtonColor): string {
+  return ({ amber: '▲', cyan: '●', magenta: '◆', lime: '■' } as Record<ButtonColor, string>)[color]
+}
 
 export function mulberry32(seed: number) {
   let a = seed >>> 0
@@ -178,9 +183,11 @@ export function createGame(seed: number, playerCount: number, language: Locale =
   const activeModules = gameStyle === 'campaign' ? [...level.activeModules] : [...allModules]
   const modifier = gameStyle === 'campaign' ? choose(modifierPool(level.id)) : 'none'
   const bonusObjective = gameStyle === 'campaign' && level.id >= 7 ? choose<BonusObjective>(['no-mistakes', 'high-stability', 'fast-finish']) : undefined
+  const followUpModule = gameStyle === 'campaign' && level.id >= 9 ? activeModules[seed % activeModules.length] : undefined
   const state: FullGame = {
     seed, playerCount, language, gameStyle, campaignLevel: gameStyle === 'campaign' ? level.id : undefined, difficulty, shiftRules: { ...settings }, activeModules, startedAt: now, endsAt: now + settings.durationMs, lastPressureAt: now, stability: 100,
     incidentsResolved: 0, incorrectActions: 0, damagedSystems: 0, unauthorizedWormholes: Math.floor(random() * 3), score: 0, outcome: 'playing', modifier, bonusObjective, forgivenModules: [],
+    targetIncidents: activeModules.length + (followUpModule ? 1 : 0), followUpModule, followUpTriggered: false,
     log: [gameStyle === 'campaign'
       ? (language === 'de' ? `Kapitel ${level.id}: ${level.title.de}. Der Auftrag beginnt.` : `Chapter ${level.id}: ${level.title.en}. The mission begins.`)
       : (language === 'de' ? `Schicht gestartet. ${activeModules.length === 1 ? 'Ein dringender Vorfall blinkt' : `${activeModules.length} dringende Vorfälle blinken`}.` : `Shift started. ${activeModules.length === 1 ? 'One priority incident is blinking' : `${activeModules.length} priority incidents are blinking`}.`)],
@@ -235,15 +242,41 @@ export function scoreForGame(game: FullGame, now = Date.now()): number {
   return Math.max(0, Math.round(base * game.shiftRules.scoreMultiplier) + (bonusEarned ? 500 : 0))
 }
 function sameSet(a: string[], b: string[]) { return a.length === b.length && a.every((value) => b.includes(value)) }
+function beginFollowUp(game: FullGame) {
+  const module = game.followUpModule
+  if (!module || game.followUpTriggered) return
+  game.followUpTriggered = true
+  if (module === 'router') {
+    const protocols: RouterProtocol[] = ['classic', 'eclipse', 'mirror']
+    game.router.resolved = false
+    game.router.protocol = protocols[(protocols.indexOf(game.router.protocol) + 1) % protocols.length]
+  }
+  if (module === 'reactor') {
+    game.reactor.resolved = false
+    game.reactor.telemetry = { flux: wrapDial(game.reactor.telemetry.flux + 1), phase: wrapDial(game.reactor.telemetry.phase + 2), coolant: wrapDial(game.reactor.telemetry.coolant + 3) }
+  }
+  if (module === 'translation') {
+    game.translation.resolved = false
+    game.translation.glyphs = [...game.translation.glyphs.slice(1), game.translation.glyphs[0]]
+    game.translation.paletteShift = (game.translation.paletteShift + 1) % 4
+    game.translation.direction = game.translation.direction === 'forward' ? 'reverse' : 'forward'
+  }
+  const names = game.language === 'de' ? { router: 'Quantenrouter', reactor: 'Reaktorkalibrierung', translation: 'Übersetzungsmatrix' } : { router: 'Quantum Router', reactor: 'Reactor Calibration', translation: 'Translation Matrix' }
+  game.log.unshift(game.language === 'de' ? `Folgeticket eingegangen: ${names[module]} wurde mit neuen Daten wieder geöffnet.` : `Follow-up ticket received: ${names[module]} reopened with new data.`)
+}
 
 export function applyAction(game: FullGame, action: GameAction, now = Date.now()): FullGame {
   if (game.outcome !== 'playing') return game
-  const next = structuredClone(game)
+  const current = advanceClock(game, now)
+  if (current.outcome !== 'playing') return current
+  const next = structuredClone(current)
   let correct = false
+  let usedGrace = false
   let module: 'router' | 'reactor' | 'translation' | '' = ''
-  if (action.type === 'router-connect' && next.activeModules.includes('router') && !next.router.resolved) { const chosen = [action.a, action.b].map((id) => next.router.nodes.find((node) => node.id === id)?.symbol || ''); correct = sameSet(chosen, routerSolution(next)); module = 'router'; if (correct) next.router.resolved = true }
-  if (action.type === 'reactor-calibrate' && next.activeModules.includes('reactor') && !next.reactor.resolved) { correct = action.dials.every((value, index) => value === reactorSolution(next)[index]); module = 'reactor'; if (correct) next.reactor.resolved = true }
-  if (action.type === 'translation-submit' && next.activeModules.includes('translation') && !next.translation.resolved) { correct = action.sequence.join(',') === translationSolution(next).join(','); module = 'translation'; if (correct) next.translation.resolved = true }
+  const grace = next.variationGrace && now <= next.variationGrace.until ? next.variationGrace : undefined
+  if (action.type === 'router-connect' && next.activeModules.includes('router') && !next.router.resolved) { const chosen = [action.a, action.b].map((id) => next.router.nodes.find((node) => node.id === id)?.symbol || ''); correct = sameSet(chosen, routerSolution(next)); usedGrace = !correct && !!grace?.router && sameSet(chosen, grace.router); correct ||= usedGrace; module = 'router'; if (correct) next.router.resolved = true }
+  if (action.type === 'reactor-calibrate' && next.activeModules.includes('reactor') && !next.reactor.resolved) { correct = action.dials.every((value, index) => value === reactorSolution(next)[index]); usedGrace = !correct && !!grace?.reactor && action.dials.every((value, index) => value === grace.reactor![index]); correct ||= usedGrace; module = 'reactor'; if (correct) next.reactor.resolved = true }
+  if (action.type === 'translation-submit' && next.activeModules.includes('translation') && !next.translation.resolved) { correct = action.sequence.join(',') === translationSolution(next).join(','); usedGrace = !correct && !!grace?.translation && action.sequence.join(',') === grace.translation.join(','); correct ||= usedGrace; module = 'translation'; if (correct) next.translation.resolved = true }
   if (!module) return game
   const moduleNames = next.language === 'de' ? { router: 'Quantenrouter', reactor: 'Reaktorkalibrierung', translation: 'Übersetzungsmatrix' } : { router: 'Quantum Router', reactor: 'Reactor Calibration', translation: 'Translation Matrix' }
   const forgiven = !correct && next.gameStyle === 'campaign' && (next.campaignLevel || 99) <= 2 && !next.forgivenModules.includes(module)
@@ -262,6 +295,7 @@ export function applyAction(game: FullGame, action: GameAction, now = Date.now()
       }
       next.log.unshift(narrative[module])
     } else next.log.unshift(next.language === 'de' ? `${moduleNames[module]} gelöst. Jemand sollte das Ticket schließen, bevor es wieder aufgeht.` : `${moduleNames[module]} cleared. Someone close the ticket before it reopens.`)
+    if (usedGrace) next.log.unshift(next.language === 'de' ? 'Datensperre bestätigt: Die Eingabe vor dem Druckstoß wurde akzeptiert.' : 'Data lock confirmed: the pre-surge submission was accepted.')
   } else if (forgiven) {
     next.forgivenModules.push(module)
     next.log.unshift(next.language === 'de' ? `Übungseingabe am ${moduleNames[module]} abgefangen. Kein Schaden – prüft die Hinweise und versucht es erneut.` : `Training input intercepted at ${moduleNames[module]}. No damage—check the guidance and try again.`)
@@ -270,38 +304,49 @@ export function applyAction(game: FullGame, action: GameAction, now = Date.now()
     next.incorrectActions += 1; next.stability = Math.max(0, next.stability - penalty); next.damagedSystems += next.incorrectActions % 2 === 0 ? 1 : 0; next.unauthorizedWormholes += action.type === 'translation-submit' ? 1 : 0
     next.log.unshift(next.language === 'de' ? `${moduleNames[module]} hat die Prozedur abgelehnt. Stabilität −${penalty}.` : `${moduleNames[module]} rejected the procedure. Stability −${penalty}.`)
   }
+  if (correct && next.incidentsResolved === next.activeModules.length && next.followUpModule && !next.followUpTriggered) beginFollowUp(next)
   if (next.stability <= 0) { next.outcome = 'lost'; next.completedAt = now; next.endReason = next.language === 'de' ? 'Die Stationsstabilität ist auf null gefallen. Der Helpdesk ist jetzt technisch gesehen eine Hilfskugel.' : 'Station stability reached zero. The helpdesk is now technically a help-sphere.' }
-  else if (next.incidentsResolved >= next.activeModules.length) { next.outcome = 'won'; next.completedAt = now; next.endReason = next.language === 'de' ? 'Alle dringenden Vorfälle wurden gelöst, bevor jemand die Leitung eingeschaltet hat.' : 'All priority incidents resolved before anyone escalated to management.' }
+  else if (next.incidentsResolved >= next.targetIncidents) { next.outcome = 'won'; next.completedAt = now; next.endReason = next.language === 'de' ? 'Alle dringenden Vorfälle wurden gelöst, bevor jemand die Leitung eingeschaltet hat.' : 'All priority incidents resolved before anyone escalated to management.' }
   if (next.outcome !== 'playing' && next.gameStyle === 'campaign' && next.campaignLevel) {
     const chapter = campaignLevel(next.campaignLevel)
     next.endReason = (next.outcome === 'won' ? chapter.success : chapter.failure)[next.language]
   }
+  next.translation.sequence = translationSolution(next)
   next.score = scoreForGame(next, now)
   return next
 }
 export function advanceClock(game: FullGame, now = Date.now()): FullGame {
   if (game.outcome !== 'playing') return game
   const next = structuredClone(game)
+  if (next.variationGrace && now > next.variationGrace.until) delete next.variationGrace
   const settings = next.shiftRules
   const pressureUntil = Math.min(now, next.endsAt)
   const pulses = Math.floor((pressureUntil - next.lastPressureAt) / settings.pressureEveryMs)
   if (pulses > 0) {
     const damage = pulses * (settings.pressureDamage + (next.modifier === 'solar-static' ? 1 : 0))
-    next.lastPressureAt += pulses * settings.pressureEveryMs
+    const latestPulseAt = next.lastPressureAt + pulses * settings.pressureEveryMs
     next.stability = Math.max(0, next.stability - damage)
     next.log.unshift(next.language === 'de' ? `Kosmischer Druckstoß: Stabilität −${damage}.` : `Cosmic pressure surge: stability −${damage}.`)
     if (next.modifier === 'router-drift' && !next.router.resolved) {
-      next.router.baseFrequency = 30 + ((next.router.baseFrequency - 30 + pulses * 11) % 31)
+      next.router.baseFrequency = 30 + ((next.router.baseFrequency - 30 + (pulses - 1) * 11) % 31)
+      next.variationGrace = { until: latestPulseAt + 5e3, router: routerSolution(next) }
+      next.router.baseFrequency = 30 + ((next.router.baseFrequency - 30 + 11) % 31)
       next.log.unshift(next.language === 'de' ? 'Frequenzdrift erkannt: Routerdaten wurden aktualisiert.' : 'Frequency drift detected: router data updated.')
     }
     if (next.modifier === 'color-flux' && !next.translation.resolved) {
-      next.translation.paletteShift = (next.translation.paletteShift + pulses) % 4
+      next.translation.paletteShift = (next.translation.paletteShift + pulses - 1) % 4
+      next.variationGrace = { until: latestPulseAt + 5e3, translation: translationSolution(next) }
+      next.translation.paletteShift = (next.translation.paletteShift + 1) % 4
       next.log.unshift(next.language === 'de' ? 'Farbfluss erkannt: Übersetzungstabelle wurde aktualisiert.' : 'Color flux detected: translation table updated.')
     }
     if (next.modifier === 'reactor-echo' && !next.reactor.resolved) {
-      next.reactor.telemetry = { flux: (next.reactor.telemetry.flux + pulses) % 6, phase: (next.reactor.telemetry.phase + pulses * 2) % 6, coolant: (next.reactor.telemetry.coolant + pulses * 3) % 6 }
+      const advanceTelemetry = (count: number) => { next.reactor.telemetry = { flux: wrapDial(next.reactor.telemetry.flux + count), phase: wrapDial(next.reactor.telemetry.phase + count * 2), coolant: wrapDial(next.reactor.telemetry.coolant + count * 3) } }
+      advanceTelemetry(pulses - 1)
+      next.variationGrace = { until: latestPulseAt + 5e3, reactor: reactorSolution(next) }
+      advanceTelemetry(1)
       next.log.unshift(next.language === 'de' ? 'Reaktorecho erkannt: Telemetrie wurde aktualisiert.' : 'Reactor echo detected: telemetry updated.')
     }
+    next.lastPressureAt = latestPulseAt
   }
   if (next.stability <= 0) {
     next.outcome = 'lost'; next.completedAt = now
@@ -314,6 +359,7 @@ export function advanceClock(game: FullGame, now = Date.now()): FullGame {
     const chapter = campaignLevel(next.campaignLevel)
     next.endReason = chapter.failure[next.language]
   }
+  next.translation.sequence = translationSolution(next)
   next.score = scoreForGame(next, now)
   return next
 }
@@ -337,15 +383,17 @@ function reactorRulesPanel(game: FullGame) {
   }
   const names = de ? { 'crossfeed': 'Kreuzfluss', 'coolant-loop': 'Kühlkreislauf', 'phase-lock': 'Phasensperre' } : { 'crossfeed': 'Crossfeed', 'coolant-loop': 'Coolant loop', 'phase-lock': 'Phase lock' }
   const wrap = de ? 'Der Regler ist ein Ring: 0 → 1 → 2 → 3 → 4 → 5 → 0. Lauft bei Bedarf weiter vorwärts oder rückwärts.' : 'Each dial is a ring: 0 → 1 → 2 → 3 → 4 → 5 → 0. Keep moving forward or backward when needed.'
-  const example = game.gameStyle === 'campaign' && game.campaignLevel === 1 ? [de ? 'PROBELAUF: Zeigt ≋ den Wert 2 und ◉ den Wert 3, landet der Pfad ≋ ⊕ ◉ auf Position 5.' : 'TEST RUN: If ≋ shows 2 and ◉ shows 3, the ≋ ⊕ ◉ path lands on position 5.'] : []
-  return { eyebrow: de ? `Reaktormodus: ${names[game.reactor.formula]}` : `Reactor mode: ${names[game.reactor.formula]}`, title: de ? 'Energiepfade verfolgen' : 'Trace the energy paths', tone: 'orange' as const, notes: [...example, de ? 'Lest jede Karte von links nach rechts: ⊕ führt Energie zusammen, ⊖ leitet den rechten Wert rückwärts.' : 'Read each card left to right: ⊕ combines energy; ⊖ routes the value on the right backward.', wrap], table: { headers: de ? ['Ziel', 'SIGNALPFAD'] : ['Target', 'SIGNAL PATH'], rows: flows[game.reactor.formula].map((flow, index) => [`${de ? 'REGLER' : 'DIAL'} ${String.fromCharCode(65 + index)}`, `${flow}  →  ◉`]) } }
+  const examples = game.gameStyle === 'campaign' && game.campaignLevel === 1 ? (de
+    ? ['EINFACH GESAGT: ⊕ bedeutet addieren. ⊖ bedeutet die rechte Zahl abziehen.', 'BEISPIEL PLUS: 2 ⊕ 3 = 5.', 'BEISPIEL MINUS: 1 ⊖ 3 = −2. Auf dem Ring zwei Schritte rückwärts ergibt Position 4.']
+    : ['IN PLAIN WORDS: ⊕ means add. ⊖ means subtract the number on the right.', 'PLUS EXAMPLE: 2 ⊕ 3 = 5.', 'MINUS EXAMPLE: 1 ⊖ 3 = −2. Moving two steps backward around the ring lands on position 4.']) : []
+  return { eyebrow: de ? `Reaktormodus: ${names[game.reactor.formula]}` : `Reactor mode: ${names[game.reactor.formula]}`, title: de ? 'Energiepfade verfolgen' : 'Trace the energy paths', tone: 'orange' as const, notes: [...examples, de ? 'Lest jede Karte von links nach rechts. Das Ergebnis ist die Stellung des genannten Reglers.' : 'Read each card from left to right. Its result is the position for the named dial.', wrap], table: { headers: de ? ['Ziel', 'SIGNALPFAD'] : ['Target', 'SIGNAL PATH'], rows: flows[game.reactor.formula].map((flow, index) => [`${de ? 'REGLER' : 'DIAL'} ${String.fromCharCode(65 + index)}`, flow]) } }
 }
 function translationRulesPanel(game: FullGame) {
   const de = game.language === 'de'; const symbols = Object.keys(symbolMeta) as SymbolId[]
   const direction = game.translation.direction === 'forward' ? (de ? 'von links nach rechts' : 'left to right') : (de ? 'von rechts nach links' : 'right to left')
   return { eyebrow: de ? `Leserichtung: ${direction}` : `Read: ${direction}`, title: de ? 'Kategorie in Farbe umwandeln' : 'Convert category to color', tone: 'pink' as const,
     notes: de ? [...(game.gameStyle === 'campaign' && game.campaignLevel === 3 ? ['ÜBUNG: Nennt erst jede Glyphe und ihre Kategorie. Sucht dann für den aktuellen Stationszustand die Farbe derselben Tabellenzeile.'] : []), `Lies die Glyphen ${direction}.`, 'Achtung: Falsche Eingaben können den Stationszustand ändern. Prüft ihn direkt vor dem Senden erneut.'] : [...(game.gameStyle === 'campaign' && game.campaignLevel === 3 ? ['TRAINING: First name each glyph and its category. Then find the color in the same table row for the current station condition.'] : []), `Read the glyphs ${direction}.`, 'Warning: mistakes can change station condition. Check it again immediately before submitting.'],
-    table: { headers: de ? ['Kategorie', 'Normal', 'Belastet', 'Kritisch'] : ['Category', 'Nominal', 'Strained', 'Critical'], rows: symbols.map(symbol => [symbolLabel(symbol, game.language).category, ...(['nominal', 'strained', 'critical'] as Condition[]).map(condition => { const color = translatedColor(game, condition, symbol); const dot = { amber: '🟠', cyan: '🔵', magenta: '🟣', lime: '🟢' }[color]; return `${dot} ${buttonLabel(color, game.language)}` })]) } }
+    table: { headers: de ? ['Kategorie', 'Normal', 'Belastet', 'Kritisch'] : ['Category', 'Nominal', 'Strained', 'Critical'], rows: symbols.map(symbol => [symbolLabel(symbol, game.language).category, ...(['nominal', 'strained', 'critical'] as Condition[]).map(condition => { const color = translatedColor(game, condition, symbol); return `${buttonMarker(color)} ${buttonLabel(color, game.language)}` })]) } }
 }
 function engineerPanels(game: FullGame) {
   return [game.activeModules.includes('router') && routerRulesPanel(game), game.activeModules.includes('reactor') && reactorRulesPanel(game), game.activeModules.includes('translation') && translationRulesPanel(game)].filter(Boolean) as RoleView['panels']
@@ -364,28 +412,44 @@ function archivistPanels(game: FullGame) {
   const de = game.language === 'de'
   const panels: RoleView['panels'] = []
   if (game.activeModules.some(module => module === 'router' || module === 'reactor')) panels.push({ eyebrow: de ? 'Anruferdossier' : 'Caller dossier', title: game.router.species, tone: 'mint' as const, rows: [...(game.activeModules.includes('router') ? [{ label: de ? 'Routeraffinität' : 'Router affinity', value: game.router.affinity === 'angular' ? (de ? 'ECKIG' : 'ANGULAR') : (de ? 'KURVIG' : 'CURVED') }] : []), ...(game.activeModules.includes('reactor') ? [{ label: de ? 'Reaktor-Offset' : 'Reactor offset', value: `+${game.reactor.speciesOffset}` }] : [])], notes: [de ? 'Nenne sie niemals „den Kunden“. Ihre Rechtsabteilung überwacht diese Frequenz.' : 'Never call them “the customer.” Their legal department monitors this frequency.'] })
-  if (game.activeModules.includes('translation')) panels.push({ eyebrow: de ? 'Glyphenlexikon' : 'Glyph lexicon', title: de ? 'Archivkarte 88-B' : 'Archive card 88-B', tone: 'pink' as const, rows: game.translation.glyphs.map((glyph) => ({ label: `${symbolMeta[glyph].glyph}  ${symbolLabel(glyph, game.language).name}`, value: symbolLabel(glyph, game.language).category })), notes: [de ? 'Nenne jede Glyphe und ihre Kategorie. Die Leserichtung steht beim Ingenieur.' : 'Name each glyph and its category. The Engineer has the required reading direction.'] })
+  if (game.activeModules.some(module => module === 'router' || module === 'translation')) {
+    const glyphs = game.activeModules.includes('router') ? (Object.keys(symbolMeta) as SymbolId[]) : game.translation.glyphs
+    panels.push({ eyebrow: de ? 'Glyphenlexikon' : 'Glyph lexicon', title: de ? 'Archivkarte 88-B' : 'Archive card 88-B', tone: 'pink' as const, rows: glyphs.map((glyph) => ({ label: `${symbolMeta[glyph].glyph}  ${symbolLabel(glyph, game.language).name}`, value: symbolLabel(glyph, game.language).category })), notes: [de ? 'Nennt zu jeder Glyphe den Namen. Für Übersetzungen wird zusätzlich die Kategorie benötigt.' : 'Give the name for each glyph. Translation incidents also require its category.'] })
+  }
   return panels
 }
 
-function campaignHint(game: FullGame, now: number) {
+function campaignHint(game: FullGame, now: number, role: RoleId) {
   if (game.gameStyle !== 'campaign' || !game.campaignLevel || game.campaignLevel > 3 || now - game.startedAt < 40e3) return undefined
   const de = game.language === 'de'
+  const reveal = now - game.startedAt >= 90e3
   if (game.campaignLevel === 1 && !game.reactor.resolved) {
+    if (role === 'operator') return de ? 'HINWEIS: Fragt nach Fluss, Phase, Kühlmittel, Spezies-Offset und den drei Energiepfaden.' : 'HINT: Ask for flux, phase, coolant, the species offset, and all three energy paths.'
+    if (!reveal) return de ? 'HINWEIS: Lest erst alle vier Zahlen laut vor. Rechnet dann jeden Energiepfad von links nach rechts auf dem Ring 0–5.' : 'HINT: Read all four numbers aloud, then calculate each energy path left to right around the 0–5 ring.'
     const answer = reactorSolution(game).join(' / ')
-    return de ? `HINWEIS: Mit den aktuellen Live-Daten lauten die Regler A / B / C: ${answer}.` : `HINT: With the current live data, Dials A / B / C are ${answer}.`
+    return de ? `NOTFALLHINWEIS: Die Regler A / B / C lauten ${answer}. Gebt sie dem Operator durch.` : `EMERGENCY HINT: Dials A / B / C are ${answer}. Tell the Operator.`
   }
   if (game.campaignLevel === 2) {
-    if (!game.reactor.resolved) return de ? 'HINWEIS: Löst zuerst den Reaktor. Dadurch ändert sich die Routerfrequenz.' : 'HINT: Solve the reactor first. That changes the router frequency.'
-    if (!game.router.resolved) { const answer = routerSolution(game).map(symbol => symbolLabel(symbol, game.language).name).join(' + '); return de ? `HINWEIS: Verbindet jetzt ${answer}.` : `HINT: Connect ${answer} now.` }
+    if (!game.reactor.resolved) return de ? 'HINWEIS: Löst zuerst gemeinsam den Reaktor. Dadurch wechselt die Routerfrequenz von HOCH zu NIEDRIG.' : 'HINT: Solve the reactor together first. That changes the router frequency from HIGH to LOW.'
+    if (!game.router.resolved) {
+      if (role === 'operator') return de ? 'HINWEIS: Beschreibt die Knotenglyphen. Fragt dann nach ihrem Namen und der Tabellenzeile für das aktuelle Band und die Affinität.' : 'HINT: Describe the node glyphs, then ask for their names and the table row matching the current band and affinity.'
+      if (!reveal) return de ? 'HINWEIS: Archivar benennt die Glyphen, Analyst nennt das Band, Ingenieur liest das passende Paar aus der Tabelle.' : 'HINT: Archivist names the glyphs, Analyst gives the band, and Engineer reads the matching pair from the table.'
+      const answer = routerSolution(game).map(symbol => symbolLabel(symbol, game.language).name).join(' + ')
+      return de ? `NOTFALLHINWEIS: Verbindet ${answer}. Sagt dem Operator auch, welche Glyphen diese Namen tragen.` : `EMERGENCY HINT: Connect ${answer}. Also tell the Operator which glyphs carry those names.`
+    }
   }
-  if (game.campaignLevel === 3 && !game.translation.resolved) return de ? `HINWEIS: Die aktuelle Farbfolge lautet ${translationSolution(game).map(color => buttonLabel(color, game.language)).join(' – ')}.` : `HINT: The current color sequence is ${translationSolution(game).map(color => buttonLabel(color, game.language)).join(' – ')}.`
+  if (game.campaignLevel === 3 && !game.translation.resolved) {
+    if (role === 'operator') return de ? 'HINWEIS: Beschreibt die drei Glyphen in Reihenfolge. Fragt nach Leserichtung, Kategorien und aktuellem Stationszustand.' : 'HINT: Describe the three glyphs in order. Ask for reading direction, categories, and current station condition.'
+    if (!reveal) return de ? 'HINWEIS: Archivar liefert Kategorien, Analyst den Stationszustand und Ingenieur Leserichtung plus Farbtabelle.' : 'HINT: Archivist supplies categories, Analyst the station condition, and Engineer the direction and color table.'
+    const answer = translationSolution(game).map(color => `${buttonMarker(color)} ${buttonLabel(color, game.language)}`).join(' – ')
+    return de ? `NOTFALLHINWEIS: Die Folge lautet ${answer}. Gebt Formen und Farben gemeinsam durch.` : `EMERGENCY HINT: The sequence is ${answer}. Communicate both shapes and colors.`
+  }
   return undefined
 }
 
 export function viewForRole(game: FullGame, role: RoleId, now = Date.now()): GameView {
-  const hint = campaignHint(game, now)
-  const common: GameView = { seed: game.seed, language: game.language, gameStyle: game.gameStyle, campaignLevel: game.campaignLevel, difficulty: game.difficulty, activeModules: game.activeModules, targetIncidents: game.activeModules.length, now, endsAt: game.endsAt, stability: game.stability, score: game.score, incidentsResolved: game.incidentsResolved, incorrectActions: game.incorrectActions, damagedSystems: game.damagedSystems, unauthorizedWormholes: game.unauthorizedWormholes, outcome: game.outcome, endReason: game.endReason, log: game.log.slice(0, 5), moduleStatus: { router: game.router.resolved, reactor: game.reactor.resolved, translation: game.translation.resolved }, modifierText: game.modifier === 'none' ? undefined : modifierDescription(game.modifier, game.language), bonusText: game.bonusObjective ? bonusDescription(game.bonusObjective, game.language) : undefined, hint }
+  const hint = campaignHint(game, now, role)
+  const common: GameView = { seed: game.seed, language: game.language, gameStyle: game.gameStyle, campaignLevel: game.campaignLevel, difficulty: game.difficulty, activeModules: game.activeModules, targetIncidents: game.targetIncidents, now, endsAt: game.endsAt, nextPressureAt: Math.min(game.endsAt, game.lastPressureAt + game.shiftRules.pressureEveryMs), variationGraceUntil: game.variationGrace?.until, stability: game.stability, score: game.score, incidentsResolved: game.incidentsResolved, incorrectActions: game.incorrectActions, damagedSystems: game.damagedSystems, unauthorizedWormholes: game.unauthorizedWormholes, outcome: game.outcome, endReason: game.endReason, log: game.log.slice(0, 5), moduleStatus: { router: game.router.resolved, reactor: game.reactor.resolved, translation: game.translation.resolved }, modifierText: game.modifier === 'none' ? undefined : modifierDescription(game.modifier, game.language), bonusText: game.bonusObjective ? bonusDescription(game.bonusObjective, game.language) : undefined, hint }
   if (role === 'operator') { const { affinity: _affinity, baseFrequency: _frequency, protocol: _protocol, ...router } = game.router; return { ...common, operator: { router, reactor: { resolved: game.reactor.resolved, dials: game.reactor.dials }, translation: { resolved: game.translation.resolved, glyphs: game.translation.glyphs } } } }
   const de = game.language === 'de'
   const config: Record<Exclude<RoleId, 'operator'>, { title: string; subtitle: string; panels: RoleView['panels'] }> = de ? {
@@ -395,7 +459,7 @@ export function viewForRole(game: FullGame, role: RoleId, now = Date.now()): Gam
   }
   if (game.gameStyle === 'campaign' && game.campaignLevel) {
     const level = campaignLevel(game.campaignLevel)
-    config[role].panels.unshift({ eyebrow: de ? `Missionsbriefing // Kapitel ${level.id}` : `Mission briefing // Chapter ${level.id}`, title: level.title[game.language], tone: 'pink', notes: [level.summary[game.language], level.briefing[game.language], ...(game.modifier === 'none' ? [] : [modifierDescription(game.modifier, game.language)]), ...(game.bonusObjective ? [bonusDescription(game.bonusObjective, game.language)] : []), ...(hint ? [hint] : [])] })
+    config[role].panels.unshift({ eyebrow: de ? `Missionsbriefing // Kapitel ${level.id}` : `Mission briefing // Chapter ${level.id}`, title: level.title[game.language], tone: 'pink', notes: [level.summary[game.language], level.briefing[game.language], ...(game.modifier === 'none' ? [] : [modifierDescription(game.modifier, game.language)]), ...(game.bonusObjective ? [bonusDescription(game.bonusObjective, game.language)] : [])] })
   }
   return { ...common, manual: { role, ...config[role] } }
 }

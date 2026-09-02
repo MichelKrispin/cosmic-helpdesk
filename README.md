@@ -66,12 +66,15 @@ No database, gameplay relay, voice chat, account, or analytics is used. PeerJS's
 - Fast Game is the original complete three-system challenge with selectable difficulty.
 - Campaign is the default mode and follows a sixteen-level story map. It starts with one system, introduces the others gradually, then unlocks additional procedures, palettes, reading directions, and stronger pressure. Campaign progress and per-level best scores are saved automatically in the host browser. The campaign lobby can copy a checksummed recovery code and restore it in another browser; an interrupted level restarts from its beginning.
 - Campaign chapters 1–3 include worked guidance, a timed hint after 40 seconds, and one damage-free training mistake per puzzle in chapters 1–2. From chapter 7 onward, each run announces a procedural modifier and an optional 500-point objective; later chapters draw from increasingly varied modifiers.
+- Hints first explain the communication process; after 90 seconds, Specialists receive an emergency answer while the Operator must still ask the crew. Chapters 9–16 add a deterministic follow-up ticket with changed data.
+- The header counts down to the next pressure surge. When a surge changes puzzle data, an answer calculated from the immediately previous readings remains valid for five seconds.
 - Before each campaign mission, every player receives a shared story dossier with the previous chapter’s outcome, the new crisis, narrative objectives, assigned roles, and current variations. The timer stays paused until the host begins the mission.
 - A deterministic seed creates the caller species, glyphs, telemetry, node layout, and valid solutions.
 - The host selects Training, Standard, or Emergency. Harder shifts are shorter, apply stronger recurring stability damage, and award larger score multipliers.
 - A shift is won only by resolving every active incident. Running out of time or stability loses the shift.
 - Scores reward resolved incidents, remaining time, and stability while penalizing mistakes and damaged systems. Personal bests are saved per difficulty in each browser.
 - Seeds also select one of three router protocols, one of three reactor procedures, four translation palettes, and either reading direction.
+- Colors are paired with distinct shapes in both the manual and Operator controls, so color names are never the only way to communicate a response.
 - Two-player crews receive one merged Specialist manual.
 - Three-player crews use an Engineer and a combined Analyst/Archivist role.
 - Four-player crews use all four distinct roles.

@@ -3,6 +3,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { extname, join, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { WebSocketServer, WebSocket } from 'ws'
+import { decodeRequestPath } from './request-path.mjs'
 
 const root = fileURLToPath(new URL('.', import.meta.url))
 const production = process.env.NODE_ENV === 'production'
@@ -18,7 +19,11 @@ const mime = {
 
 const server = http.createServer(async (req, res) => {
   if (!production && vite) return vite.middlewares(req, res, () => {})
-  const raw = decodeURIComponent((req.url || '/').split('?')[0])
+  const raw = decodeRequestPath(req.url)
+  if (raw === null) {
+    res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' }).end('Bad request')
+    return
+  }
   const safe = normalize(raw).replace(/^(\.\.(\/|\\|$))+/, '')
   let path = join(root, 'dist', safe === '/' ? 'index.html' : safe)
   try {
