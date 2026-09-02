@@ -148,6 +148,7 @@ nav, .app-shell > header { height: 92px; max-width: 1280px; margin: auto; paddin
 .game-header { min-height: 78px; padding: 12px 30px; border-bottom: 1px solid #313748; display: grid; grid-template-columns: 1fr auto auto 1fr auto; align-items: center; gap: 28px; background: #0c111e; position: sticky; top: 0; z-index: 10; }
 .shift-clock { text-align: center; padding: 0 35px; border-left: 1px solid #313748; border-right: 1px solid #313748; }
 .shift-clock span, .stability span { display: block; color: #687087; font: 9px 'DM Mono'; letter-spacing: .12em; }
+.shift-clock > span { color: var(--mint); font-weight: 700; }
 .shift-clock strong { font: 500 27px 'DM Mono'; color: var(--orange); }
 .score-box { text-align: center; min-width: 90px; }
 .score-box span { display: block; color: #687087; font: 9px 'DM Mono'; letter-spacing: .12em; }
@@ -242,6 +243,7 @@ nav, .app-shell > header { height: 92px; max-width: 1280px; margin: auto; paddin
 .manual-panel-heading span { color: #777970; font: 8px 'DM Mono'; text-transform: uppercase; letter-spacing: .12em; }.manual-panel-heading h2 { font-size: 18px; margin: 5px 0 16px; }
 .data-rows { border-top: 1px solid #cbc8ba; }.data-rows div { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #cbc8ba; font: 12px 'DM Mono'; }.data-rows strong { color: #126f5a; }
 .table-wrap { overflow-x: auto; }.manual-panel table { width: 100%; border-collapse: collapse; font: 10px 'DM Mono'; }.manual-panel th { color: #666a65; text-align: left; border-bottom: 2px solid #252c30; padding: 7px 5px; }.manual-panel td { padding: 8px 5px; border-bottom: 1px solid #c8c5b8; }
+.manual-panel.orange table td:first-child { color: #9b4f20; font-weight: 700; }.manual-panel.orange table td:nth-child(2) { padding: 12px 8px; background: #e27e3910; color: #24313a; font-size: 12px; letter-spacing: .03em; }
 .manual-panel ul { padding-left: 17px; margin: 14px 0 0; }.manual-panel li { font-size: 11px; line-height: 1.55; margin-bottom: 5px; }
 
 .mission-briefing-screen { min-height: 100vh; padding-bottom: 60px; background: radial-gradient(circle at 50% 15%, #271b35 0, #090d18 54%); }
@@ -266,6 +268,7 @@ nav, .app-shell > header { height: 92px; max-width: 1280px; margin: auto; paddin
 .mission-task-list article strong { font-size: 14px; }.mission-task-list article p { margin: 4px 0 0; color: #8d95a6; font-size: 12px; line-height: 1.5; }
 .briefing-crew { margin-top: 24px; }.briefing-crew > div { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
 .briefing-crew span { padding: 8px 10px; border: 1px solid #343d50; color: var(--paper); font-size: 11px; }.briefing-crew span b { display: block; margin-top: 3px; color: #788297; font: 8px 'DM Mono'; }
+.briefing-crew span:first-child { border-color: var(--mint); background: #63f5c70d; color: var(--mint); box-shadow: 0 0 14px #63f5c71c; }
 .briefing-launch { margin-top: 28px; padding-top: 22px; border-top: 1px solid #343d50; display: flex; align-items: center; justify-content: space-between; gap: 20px; }.briefing-launch > small { color: #727b8d; font-size: 10px; }
 
 .end-screen { min-height: 100vh; display: grid; place-items: center; padding: 40px 20px; background: radial-gradient(circle, #17382f 0, #080b16 56%); }

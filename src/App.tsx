@@ -237,9 +237,9 @@ function App() {
   if (screen === 'home') return <Home language={language} onLanguage={chooseLanguage} onCreate={createSession} />
   if (screen === 'lobby') return <Lobby players={players} isHost={isHost} status={ui(language).status[status]} copied={copied} language={language} difficulty={difficulty} gameStyle={gameStyle} campaignLevelId={campaignLevelId} campaignProgress={campaignProgress} recoveryCode={createRecoveryCode(campaignProgress)} onRestoreCampaign={restoreCampaign} onLanguage={chooseLanguage} onDifficulty={chooseDifficulty} onGameStyle={chooseGameStyle} onCampaignLevel={chooseCampaignLevel} onCopy={copyInvite} onStart={startGame} onLeave={leaveSession} />
   if (!view) return <Loading status={ui(language).status[status]} />
-  if (screen === 'briefing') return <MissionBriefing view={view} players={players} isHost={isHost} onBegin={beginMission} onLeave={leaveSession} />
+  if (screen === 'briefing') return <MissionBriefing view={view} players={players} selfId={selfRef.current.id} isHost={isHost} onBegin={beginMission} onLeave={leaveSession} />
   if (view.outcome !== 'playing') return <EndScreen view={view} isHost={isHost} bestScore={bestScore} newBest={newBest} onReplay={startGame} onNextCampaign={startNextCampaignLevel} onLeave={leaveSession} />
-  return <GameScreen view={view} players={players} onAction={submitAction} onLeave={leaveSession} />
+  return <GameScreen view={view} players={players} selfId={selfRef.current.id} onAction={submitAction} onLeave={leaveSession} />
 }
 
 function Brand({ compact = false }: { compact?: boolean }) { return <div className={`brand ${compact ? 'compact' : ''}`}><span className="brand-orbit">C</span><span>COSMIC<br />HELPDESK</span></div> }
@@ -248,7 +248,7 @@ function LanguageSelector({ language, onChange, disabled = false }: { language: 
   return <div className="language-selector" aria-label={t.language}><span>{t.language}</span><div><button className={language === 'en' ? 'selected' : ''} onClick={() => onChange('en')} disabled={disabled}>EN</button><button className={language === 'de' ? 'selected' : ''} onClick={() => onChange('de')} disabled={disabled}>DE</button></div></div>
 }
 
-function MissionBriefing({ view, players, isHost, onBegin, onLeave }: { view: GameView; players: Player[]; isHost: boolean; onBegin: () => void; onLeave: () => void }) {
+function MissionBriefing({ view, players, selfId, isHost, onBegin, onLeave }: { view: GameView; players: Player[]; selfId: string; isHost: boolean; onBegin: () => void; onLeave: () => void }) {
   const t = ui(view.language); const chapter = campaignLevel(view.campaignLevel || 1)
   const level = chapter.id === 1 ? { ...chapter, briefing: { ...chapter.briefing, [view.language]: `\n\n${t.stationOrientation}\n\n${t.stationIntro.join('\n\n')}\n\n${chapter.briefing[view.language]}` } } : chapter
   const previous = level.id > 1 ? campaignLevel(level.id - 1).success[view.language] : (view.language === 'de' ? 'Die Nachtschicht beginnt mit einem schwachen Notsignal aus einem stillgelegten Relais.' : 'The night shift begins with a faint distress call from a decommissioned relay.')
@@ -263,6 +263,7 @@ function MissionBriefing({ view, players, isHost, onBegin, onLeave }: { view: Ga
   }
   const moduleNames = { router: t.quantumRouter, reactor: t.reactorCalibration, translation: t.translationMatrix }
   const ownRole = view.manual?.role || players.find(player => player.isHost)?.role || null
+  players = [...players].sort((a, b) => Number(b.id === selfId) - Number(a.id === selfId)).map(player => player.id === selfId ? { ...player, name: `▶ ${player.name} · ${t.youAre}` } : player)
   return <main className="mission-briefing-screen"><header><Brand compact /><button className="text-button" onClick={onLeave}>{t.leave}</button></header><section className="mission-dossier"><div className="dossier-stamp">{t.campaign} // {t.level} {level.id.toString().padStart(2, '0')} // {t.missionBriefing}</div><p className="kicker">{t.storySoFar}</p><p className="story-recap">{previous}</p><h1>{level.title[view.language]}</h1><p className="story-lede">{level.summary[view.language]} {level.briefing[view.language]}</p><div className="mission-facts"><article><small>{t.yourRole}</small><strong>{roleName(ownRole, view.language)}</strong><p>{t.roleStory}</p></article><article><small>{t.shiftWindow}</small><strong>{Math.round((view.endsAt - view.now) / 60000)} {t.minutes}</strong><p>{t.timerPaused}</p></article></div>{view.modifierText && <div className="dossier-alert"><b>⚠ {t.missionVariation}</b><p>{view.modifierText}</p></div>}{view.bonusText && <div className="dossier-bonus"><b>★ {t.optionalObjective}</b><p>{view.bonusText}</p></div>}<div className="mission-task-list"><small>{t.missionObjectives}</small>{view.activeModules.map((module, index) => <article key={module}><b>0{index + 1}</b><div><strong>{moduleNames[module]}</strong><p>{tasks[module]}</p></div></article>)}</div><div className="briefing-crew"><small>{t.assignedCrew}</small><div>{players.filter(player => player.connected).map(player => <span key={player.id}>{player.name}<b>{roleName(player.role, view.language)}</b></span>)}</div></div><div className="briefing-launch">{isHost ? <button className="primary" onClick={onBegin}>{t.beginMission}<b>→</b></button> : <p className="waiting">{t.waitingBriefing}</p>}<small>{t.readBeforeStart}</small></div></section></main>
 }
 
@@ -321,19 +322,20 @@ function puzzleInstruction(view: GameView, module: 'router' | 'reactor' | 'trans
   const caller = view.operator?.router.species || (view.language === 'de' ? 'den Anrufer' : 'the caller')
   const text = view.language === 'de' ? {
     router: `Öffnet in „${title}“ einen sicheren Korridor für ${caller}. Fragt nach Protokoll, Frequenzband und Affinität, dann wählt zwei Knoten.`,
-    reactor: `Haltet die Mission „${title}“ am Leben. Lasst euch die drei Zielwerte berechnen, stellt die Regler ein und startet die Kalibrierung.`,
+    reactor: `Haltet die Mission „${title}“ am Leben. Lasst euch die drei Energiepfade beschreiben, dreht die Regler auf ihre Zielpositionen und startet den Kern.`,
     translation: 'Die fremde Nachricht könnte die Geschichte verändern. Erfragt Leserichtung, Glyphenkategorien und Stationszustand, dann sendet die drei Farben.',
   } : {
     router: `Open a safe corridor through “${title}” for ${caller}. Ask for protocol, frequency band, and affinity, then choose two nodes.`,
-    reactor: `Keep “${title}” alive. Have the crew calculate all three target values, set the dials, and engage calibration.`,
+    reactor: `Keep “${title}” alive. Have the crew describe all three energy paths, turn the dials to their landing positions, and engage the core.`,
     translation: 'The alien message may change the story. Ask for reading direction, glyph categories, and station condition, then send three colors.',
   }
   return text[module]
 }
 
-function GameScreen({ view, players, onAction, onLeave }: { view: GameView; players: Player[]; onAction: (action: GameActionInput) => void; onLeave: () => void }) {
-  const t = ui(view.language); const role = view.manual?.role || players.find((player) => player.isHost)?.role || null
-  const shiftLabel = view.gameStyle === 'campaign' && view.campaignLevel ? `${t.campaign} · ${t.level} ${view.campaignLevel}` : `${t.fastGame} · ${difficultyLabel(view.difficulty, view.language)}`
+function GameScreen({ view, players, selfId, onAction, onLeave }: { view: GameView; players: Player[]; selfId: string; onAction: (action: GameActionInput) => void; onLeave: () => void }) {
+  const t = ui(view.language); const activePlayer = players.find(player => player.id === selfId); const role = view.manual?.role || activePlayer?.role || players.find((player) => player.isHost)?.role || null
+  const modeLabel = view.gameStyle === 'campaign' && view.campaignLevel ? `${t.campaign} · ${t.level} ${view.campaignLevel}` : `${t.fastGame} · ${difficultyLabel(view.difficulty, view.language)}`
+  const shiftLabel = `${t.youAre}: ${activePlayer?.name || '—'} · ${roleName(role, view.language)} // ${modeLabel}`
   return <main className="game-shell"><header className="game-header"><Brand compact /><div className="shift-clock"><span>{shiftLabel} · {t.shiftEnds}</span><strong>{formatTime(view.endsAt - view.now)}</strong></div><div className="score-box"><span>{t.score}</span><strong>{view.score.toLocaleString()}</strong></div><div className="stability"><span>{t.stationStability} <b>{view.stability}%</b></span><div><i style={{ width: `${view.stability}%` }} /></div></div><button className="icon-button" onClick={onLeave} aria-label={t.leaveAria}>×</button></header>{view.operator ? <OperatorConsole view={view} onAction={onAction} /> : <SpecialistConsole view={view} role={role || view.manual?.role || null} />}</main>
 }
 

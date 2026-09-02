@@ -329,26 +329,23 @@ function routerRulesPanel(game: FullGame) {
 }
 function reactorRulesPanel(game: FullGame) {
   const de = game.language === 'de'
-  const formulas = de ? {
-    'crossfeed': ['Regler A = Fluss + Phase', 'Regler B = Kühlmittel − Phase', 'Regler C = Fluss + Kühlmittel + Spezies-Offset'],
-    'coolant-loop': ['Regler A = Fluss + Kühlmittel', 'Regler B = Phase + Spezies-Offset', 'Regler C = Kühlmittel − Fluss'],
-    'phase-lock': ['Regler A = Phase + Kühlmittel + Spezies-Offset', 'Regler B = Fluss − Phase', 'Regler C = Fluss + Phase'],
-  } : {
-    'crossfeed': ['Dial A = Flux + Phase', 'Dial B = Coolant − Phase', 'Dial C = Flux + Coolant + species offset'],
-    'coolant-loop': ['Dial A = Flux + Coolant', 'Dial B = Phase + species offset', 'Dial C = Coolant − Flux'],
-    'phase-lock': ['Dial A = Phase + Coolant + species offset', 'Dial B = Flux − Phase', 'Dial C = Flux + Phase'],
+  const source = de ? { flux: '≋ FLUSS', phase: '◉ PHASE', coolant: '❄ KÜHLMITTEL', offset: '✦ SPEZIES' } : { flux: '≋ FLUX', phase: '◉ PHASE', coolant: '❄ COOLANT', offset: '✦ SPECIES' }
+  const flows: Record<ReactorFormula, string[]> = {
+    'crossfeed': [`${source.flux}  ⊕  ${source.phase}`, `${source.coolant}  ⊖  ${source.phase}`, `${source.flux}  ⊕  ${source.coolant}  ⊕  ${source.offset}`],
+    'coolant-loop': [`${source.flux}  ⊕  ${source.coolant}`, `${source.phase}  ⊕  ${source.offset}`, `${source.coolant}  ⊖  ${source.flux}`],
+    'phase-lock': [`${source.phase}  ⊕  ${source.coolant}  ⊕  ${source.offset}`, `${source.flux}  ⊖  ${source.phase}`, `${source.flux}  ⊕  ${source.phase}`],
   }
   const names = de ? { 'crossfeed': 'Kreuzfluss', 'coolant-loop': 'Kühlkreislauf', 'phase-lock': 'Phasensperre' } : { 'crossfeed': 'Crossfeed', 'coolant-loop': 'Coolant loop', 'phase-lock': 'Phase lock' }
-  const wrap = de ? 'Die Regler zeigen nur 0–5: Ziehe bei 6 oder mehr immer wieder 6 ab. Addiere bei einem negativen Ergebnis 6.' : 'Dials only show 0–5: if a result is 6 or more, keep subtracting 6. If it is negative, add 6.'
-  const example = game.gameStyle === 'campaign' && game.campaignLevel === 1 ? [de ? 'BEISPIEL: Bei Fluss 2 und Phase 3 wäre Regler A = 2 + 3 = 5. Berechnet genauso die drei Werte mit euren Live-Daten.' : 'EXAMPLE: With Flux 2 and Phase 3, Dial A would be 2 + 3 = 5. Calculate all three values the same way using your live data.'] : []
-  return { eyebrow: de ? `Reaktormodus: ${names[game.reactor.formula]}` : `Reactor mode: ${names[game.reactor.formula]}`, title: de ? 'Regler berechnen' : 'Calculate the dials', tone: 'orange' as const, notes: [...example, wrap, ...formulas[game.reactor.formula]] }
+  const wrap = de ? 'Der Regler ist ein Ring: 0 → 1 → 2 → 3 → 4 → 5 → 0. Lauft bei Bedarf weiter vorwärts oder rückwärts.' : 'Each dial is a ring: 0 → 1 → 2 → 3 → 4 → 5 → 0. Keep moving forward or backward when needed.'
+  const example = game.gameStyle === 'campaign' && game.campaignLevel === 1 ? [de ? 'PROBELAUF: Zeigt ≋ den Wert 2 und ◉ den Wert 3, landet der Pfad ≋ ⊕ ◉ auf Position 5.' : 'TEST RUN: If ≋ shows 2 and ◉ shows 3, the ≋ ⊕ ◉ path lands on position 5.'] : []
+  return { eyebrow: de ? `Reaktormodus: ${names[game.reactor.formula]}` : `Reactor mode: ${names[game.reactor.formula]}`, title: de ? 'Energiepfade verfolgen' : 'Trace the energy paths', tone: 'orange' as const, notes: [...example, de ? 'Lest jede Karte von links nach rechts: ⊕ führt Energie zusammen, ⊖ leitet den rechten Wert rückwärts.' : 'Read each card left to right: ⊕ combines energy; ⊖ routes the value on the right backward.', wrap], table: { headers: de ? ['Ziel', 'SIGNALPFAD'] : ['Target', 'SIGNAL PATH'], rows: flows[game.reactor.formula].map((flow, index) => [`${de ? 'REGLER' : 'DIAL'} ${String.fromCharCode(65 + index)}`, `${flow}  →  ◉`]) } }
 }
 function translationRulesPanel(game: FullGame) {
   const de = game.language === 'de'; const symbols = Object.keys(symbolMeta) as SymbolId[]
   const direction = game.translation.direction === 'forward' ? (de ? 'von links nach rechts' : 'left to right') : (de ? 'von rechts nach links' : 'right to left')
   return { eyebrow: de ? `Leserichtung: ${direction}` : `Read: ${direction}`, title: de ? 'Kategorie in Farbe umwandeln' : 'Convert category to color', tone: 'pink' as const,
     notes: de ? [...(game.gameStyle === 'campaign' && game.campaignLevel === 3 ? ['ÜBUNG: Nennt erst jede Glyphe und ihre Kategorie. Sucht dann für den aktuellen Stationszustand die Farbe derselben Tabellenzeile.'] : []), `Lies die Glyphen ${direction}.`, 'Achtung: Falsche Eingaben können den Stationszustand ändern. Prüft ihn direkt vor dem Senden erneut.'] : [...(game.gameStyle === 'campaign' && game.campaignLevel === 3 ? ['TRAINING: First name each glyph and its category. Then find the color in the same table row for the current station condition.'] : []), `Read the glyphs ${direction}.`, 'Warning: mistakes can change station condition. Check it again immediately before submitting.'],
-    table: { headers: de ? ['Kategorie', 'Normal', 'Belastet', 'Kritisch'] : ['Category', 'Nominal', 'Strained', 'Critical'], rows: symbols.map(symbol => [symbolLabel(symbol, game.language).category, ...(['nominal', 'strained', 'critical'] as Condition[]).map(condition => buttonLabel(translatedColor(game, condition, symbol), game.language))]) } }
+    table: { headers: de ? ['Kategorie', 'Normal', 'Belastet', 'Kritisch'] : ['Category', 'Nominal', 'Strained', 'Critical'], rows: symbols.map(symbol => [symbolLabel(symbol, game.language).category, ...(['nominal', 'strained', 'critical'] as Condition[]).map(condition => { const color = translatedColor(game, condition, symbol); const dot = { amber: '🟠', cyan: '🔵', magenta: '🟣', lime: '🟢' }[color]; return `${dot} ${buttonLabel(color, game.language)}` })]) } }
 }
 function engineerPanels(game: FullGame) {
   return [game.activeModules.includes('router') && routerRulesPanel(game), game.activeModules.includes('reactor') && reactorRulesPanel(game), game.activeModules.includes('translation') && translationRulesPanel(game)].filter(Boolean) as RoleView['panels']
@@ -358,7 +355,8 @@ function analystPanels(game: FullGame) {
   const de = game.language === 'de'; const condition = stationCondition(game.stability)
   const conditionLabel = de ? { nominal: 'NORMAL', strained: 'BELASTET', critical: 'KRITISCH' }[condition] : condition.toUpperCase()
   const panels: RoleView['panels'] = []
-  if (game.activeModules.includes('reactor')) panels.push({ eyebrow: de ? 'Live-Telemetrie' : 'Live telemetry', title: de ? 'Reaktordaten' : 'Reactor feed', tone: 'orange' as const, rows: [{ label: de ? 'Fluss' : 'Flux', value: String(game.reactor.telemetry.flux) }, { label: 'Phase', value: String(game.reactor.telemetry.phase) }, { label: de ? 'Kühlmittel' : 'Coolant', value: String(game.reactor.telemetry.coolant) }], notes: [de ? 'Die Messwerte sind einfache Zahlen von 0 bis 5.' : 'Each reading is a simple number from 0 to 5.'] })
+  const meter = (value: number) => `${value}   ${'●'.repeat(value)}${'○'.repeat(5 - value)}`
+  if (game.activeModules.includes('reactor')) panels.push({ eyebrow: de ? 'Live-Telemetrie' : 'Live telemetry', title: de ? 'Reaktordaten' : 'Reactor feed', tone: 'orange' as const, rows: [{ label: de ? '≋  Fluss' : '≋  Flux', value: meter(game.reactor.telemetry.flux) }, { label: '◉  Phase', value: meter(game.reactor.telemetry.phase) }, { label: de ? '❄  Kühlmittel' : '❄  Coolant', value: meter(game.reactor.telemetry.coolant) }], notes: [de ? 'Zahl und Leuchtpunkte zeigen dasselbe Signal von 0 bis 5.' : 'The number and lit pips show the same signal from 0 to 5.'] })
   if (game.activeModules.some(module => module === 'router' || module === 'translation')) panels.push({ eyebrow: de ? 'Live-Telemetrie' : 'Live telemetry', title: de ? 'Router & Station' : 'Router & station', tone: 'mint' as const, rows: [...(game.activeModules.includes('router') ? [{ label: de ? 'Routerfrequenz' : 'Router frequency', value: `${effectiveRouterFrequency(game)} THz` }, { label: de ? 'Frequenzband' : 'Frequency band', value: effectiveRouterFrequency(game) >= 50 ? (de ? 'HOCH' : 'HIGH') : (de ? 'NIEDRIG' : 'LOW') }] : []), ...(game.activeModules.includes('translation') ? [{ label: de ? 'Stationszustand' : 'Station condition', value: conditionLabel }] : [])], notes: game.activeModules.includes('router') ? (game.reactor.resolved ? [de ? 'Reaktor stabil: Frequenzaufschlag des Routers entfernt.' : 'Reactor stable: router frequency penalty removed.'] : [de ? 'Die Reaktorinstabilität addiert 20 THz zur Routerfrequenz.' : 'Reactor instability adds +20 THz to the router feed.']) : undefined })
   return panels
 }

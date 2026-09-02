@@ -111,9 +111,10 @@ try {
     const values = (panel) => Object.fromEntries([...panel.querySelectorAll('.data-rows > div')].map(row => [row.querySelector('span').textContent, row.querySelector('strong').textContent]))
     const telemetry = values(panels.find(panel => panel.querySelector('h2')?.textContent === 'Reaktordaten'))
     const dossier = values(panels.find(panel => panel.textContent.includes('Reaktor-Offset')))
-    const procedure = panels.find(panel => panel.querySelector('h2')?.textContent === 'Regler berechnen').textContent
-    const mode = procedure.includes('Regler A = Fluss + Kühlmittel') ? 'coolant-loop' : procedure.includes('Regler A = Phase + Kühlmittel') ? 'phase-lock' : 'crossfeed'
-    return { flux: +telemetry.Fluss, phase: +telemetry.Phase, coolant: +telemetry['Kühlmittel'], offset: +dossier['Reaktor-Offset'], mode }
+    const procedure = panels.find(panel => panel.querySelector('h2')?.textContent === 'Energiepfade verfolgen').textContent
+    const reading = (fragment) => Number.parseInt(Object.entries(telemetry).find(([label]) => label.includes(fragment))[1], 10)
+    const mode = procedure.includes('Kühlkreislauf') ? 'coolant-loop' : procedure.includes('Phasensperre') ? 'phase-lock' : 'crossfeed'
+    return { flux: reading('Fluss'), phase: reading('Phase'), coolant: reading('Kühlmittel'), offset: +dossier['Reaktor-Offset'], mode }
   })()`)
   const wrap = (value) => ((value % 6) + 6) % 6
   const desiredDials = reactorData.mode === 'coolant-loop'
@@ -140,7 +141,7 @@ try {
   })()`)
   const colorIds = { BERNSTEIN: 'amber', CYAN: 'cyan', MAGENTA: 'magenta', LIMETTE: 'lime' }
   const orderedCategories = translationData.reverse ? [...translationData.categories].reverse() : translationData.categories
-  const response = orderedCategories.map((category) => colorIds[translationData.map[category]])
+  const response = orderedCategories.map((category) => colorIds[translationData.map[category].trim().split(/\s+/).at(-1)])
   await host.eval(`(() => { const colors = ${JSON.stringify(response)}; colors.forEach(color => document.querySelector('.color-buttons .color-' + color).click()) })()`)
   await delay(250)
   await host.eval('[...document.querySelectorAll("button")].find(b => b.textContent.includes("SENDEN")).click()')
