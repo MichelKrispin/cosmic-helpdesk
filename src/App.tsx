@@ -24,11 +24,16 @@ function parseInvite() {
 }
 
 function defaultName() {
-  const adjectives = ['Nebula', 'Lunar', 'Turbo', 'Quantum', 'Velvet', 'Chrome']
-  const jobs = ['Intern', 'Tech', 'Clerk', 'Agent', 'Mechanic', 'Rep']
-  const bytes = new Uint8Array(2)
+  const cosmic = ['Nebula', 'Lunar', 'Turbo', 'Quantum', 'Velvet', 'Chrome', 'Nova', 'Orbit', 'Quasar', 'Echo', 'Flux', 'Prisma']
+  const names = ['Otto', 'Karl', 'Paula', 'Nils', 'Kalle', 'Claus', 'Susi', 'Frida', 'Petra']
+  const jobs = ['Operator', 'Techniker', 'Agent', 'Pilot', 'Lotse', 'Profi']
+  const designations = ['404', 'Nachtschicht', 'B-Team', 'Relais 7']
+  const bytes = new Uint8Array(4)
   crypto.getRandomValues(bytes)
-  return `${adjectives[bytes[0] % adjectives.length]} ${jobs[bytes[1] % jobs.length]}`
+  const prefix = cosmic[bytes[0] % cosmic.length]; const name = names[bytes[1] % names.length]; const job = jobs[bytes[2] % jobs.length]
+  if (bytes[3] % 4 === 0) return `${prefix} ${name} ${designations[bytes[2] % designations.length]}`
+  if (bytes[3] % 4 === 1) return `${name} ${job}`
+  return `${prefix} ${name}`
 }
 
 function formatTime(ms: number) {
