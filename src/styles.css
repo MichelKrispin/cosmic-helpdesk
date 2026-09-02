@@ -244,6 +244,30 @@ nav, .app-shell > header { height: 92px; max-width: 1280px; margin: auto; paddin
 .table-wrap { overflow-x: auto; }.manual-panel table { width: 100%; border-collapse: collapse; font: 10px 'DM Mono'; }.manual-panel th { color: #666a65; text-align: left; border-bottom: 2px solid #252c30; padding: 7px 5px; }.manual-panel td { padding: 8px 5px; border-bottom: 1px solid #c8c5b8; }
 .manual-panel ul { padding-left: 17px; margin: 14px 0 0; }.manual-panel li { font-size: 11px; line-height: 1.55; margin-bottom: 5px; }
 
+.mission-briefing-screen { min-height: 100vh; padding-bottom: 60px; background: radial-gradient(circle at 50% 15%, #271b35 0, #090d18 54%); }
+.mission-dossier { width: min(860px, calc(100% - 28px)); margin: 42px auto; padding: 36px 42px; border: 1px solid #65445f; border-top: 5px solid var(--pink); background: #0e1420f2; box-shadow: 16px 16px 0 #03050b; }
+.dossier-stamp { color: var(--pink); font: 9px 'DM Mono'; letter-spacing: .14em; }
+.mission-dossier > .kicker { margin-top: 28px; }
+.story-recap { margin: 6px 0 26px; padding-left: 14px; border-left: 2px solid #4b5368; color: #858da0; font-size: 13px; line-height: 1.55; }
+.mission-dossier h1 { margin: 0; font-size: clamp(42px, 7vw, 72px); line-height: 1; letter-spacing: -.05em; }
+.story-lede { max-width: 720px; margin: 18px 0 28px; color: #c0c5d0; font-size: 17px; line-height: 1.6; }
+.mission-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mission-facts article { padding: 15px; border: 1px solid #333d52; background: #0a0f1b; }
+.mission-facts small, .mission-task-list > small, .briefing-crew > small { color: #737d92; font: 9px 'DM Mono'; letter-spacing: .12em; }
+.mission-facts strong { display: block; margin-top: 6px; color: var(--mint); font-size: 17px; }
+.mission-facts p { margin: 5px 0 0; color: #7f8799; font-size: 11px; line-height: 1.5; }
+.dossier-alert, .dossier-bonus { margin-top: 10px; padding: 13px 15px; border: 1px solid #6c513c; background: #ff9b550d; }
+.dossier-alert b, .dossier-bonus b { color: var(--orange); font: 10px 'DM Mono'; letter-spacing: .08em; }
+.dossier-alert p, .dossier-bonus p { margin: 5px 0 0; color: #aab0bd; font-size: 12px; }
+.dossier-bonus { border-color: #315f55; background: #63f5c708; }.dossier-bonus b { color: var(--mint); }
+.mission-task-list { margin-top: 28px; display: grid; gap: 8px; }
+.mission-task-list article { display: grid; grid-template-columns: 38px 1fr; gap: 13px; align-items: start; padding: 13px; border: 1px solid #343d50; background: #111725; }
+.mission-task-list article > b { width: 34px; height: 34px; display: grid; place-items: center; background: var(--orange); color: var(--ink); font: 700 10px 'DM Mono'; }
+.mission-task-list article strong { font-size: 14px; }.mission-task-list article p { margin: 4px 0 0; color: #8d95a6; font-size: 12px; line-height: 1.5; }
+.briefing-crew { margin-top: 24px; }.briefing-crew > div { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+.briefing-crew span { padding: 8px 10px; border: 1px solid #343d50; color: var(--paper); font-size: 11px; }.briefing-crew span b { display: block; margin-top: 3px; color: #788297; font: 8px 'DM Mono'; }
+.briefing-launch { margin-top: 28px; padding-top: 22px; border-top: 1px solid #343d50; display: flex; align-items: center; justify-content: space-between; gap: 20px; }.briefing-launch > small { color: #727b8d; font-size: 10px; }
+
 .end-screen { min-height: 100vh; display: grid; place-items: center; padding: 40px 20px; background: radial-gradient(circle, #17382f 0, #080b16 56%); }
 .end-screen.defeat { background: radial-gradient(circle, #431d2c 0, #080b16 56%); }
 .end-card { width: min(650px, 100%); border: 1px solid #536054; background: #0e1420ee; box-shadow: 18px 18px 0 #03050b; padding: 34px 48px; text-align: center; position: relative; }
@@ -268,4 +292,5 @@ nav, .app-shell > header { height: 92px; max-width: 1280px; margin: auto; paddin
 }
 @media (max-width: 720px) {
   nav, .app-shell > header { padding: 0 20px; }.signal-pill { display: none; }.language-selector > span { display: none; }.hero { padding: 55px 20px; }.hero h1 { font-size: 50px; }.hero-console { transform: none; }.how-grid { grid-template-columns: 1fr; padding: 0 20px 50px; }.how-grid article { padding-right: 0; }.lobby-card { margin: 25px 14px; padding: 22px; }.lobby-heading, .lobby-footer { align-items: flex-start; flex-direction: column; }.invite-box { align-items: stretch; flex-direction: column; }.language-row, .difficulty-row, .style-row { align-items: flex-start; flex-direction: column; }.difficulty-selector, .style-selector { justify-content: flex-start; }.campaign-map-heading, .campaign-brief { align-items: flex-start; flex-direction: column; }.campaign-route { grid-template-columns: repeat(2, 1fr); }.campaign-route button:nth-child(2n + 1)::before { display: none; }.campaign-brief small { text-align: left; }.crew-grid { grid-template-columns: 1fr; }.game-header { grid-template-columns: 1fr auto auto auto; gap: 12px; }.game-header .brand { display: none; }.shift-clock { padding: 0 10px; }.score-box { min-width: 70px; }.stability { min-width: 120px; }.game-content { padding: 20px 12px; }.role-banner { align-items: flex-start; flex-direction: column; gap: 12px; }.role-banner p:last-child { text-align: left; }.module-grid, .module-grid.modules-1, .module-grid.modules-2 { grid-template-columns: 1fr; }.translation-card { grid-column: auto; }.manual-layout { grid-template-columns: 1fr; }.manual-sidebar { display: grid; grid-template-columns: 1fr 1fr; }.id-card { grid-row: span 2; }.event-log { grid-template-columns: 1fr; gap: 8px; }.end-card { padding: 28px 20px; }.end-actions { flex-direction: column; }
+  .mission-dossier { margin-top: 20px; padding: 25px 20px; }.mission-facts { grid-template-columns: 1fr; }.briefing-launch { align-items: flex-start; flex-direction: column; }.briefing-launch .primary { width: 100%; }
 }

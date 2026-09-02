@@ -6,10 +6,10 @@ import {
 import { ui, type StatusId } from './i18n'
 import { makeId, PeerMesh, type MeshEvent } from './network'
 
-type Screen = 'home' | 'lobby' | 'game'
+type Screen = 'home' | 'lobby' | 'briefing' | 'game'
 type AppMessage =
   | { type: 'lobby'; players: Player[]; language: Locale; difficulty: DifficultyId; gameStyle: GameStyle; campaignLevel: number }
-  | { type: 'state'; view: GameView }
+  | { type: 'state'; view: GameView; phase?: 'briefing' | 'game' }
   | { type: 'action'; action: GameAction }
   | { type: 'session-ended' }
   | { type: 'capacity' }
@@ -97,13 +97,13 @@ function App() {
   const sendLobby = useCallback((next = playersRef.current, nextLanguage = languageRef.current, nextDifficulty = difficultyRef.current, nextStyle = gameStyleRef.current, nextLevel = campaignLevelRef.current) => {
     meshRef.current?.broadcast((): AppMessage => ({ type: 'lobby', players: next, language: nextLanguage, difficulty: nextDifficulty, gameStyle: nextStyle, campaignLevel: nextLevel }))
   }, [])
-  const hostBroadcastState = useCallback((game: FullGame) => {
+  const hostBroadcastState = useCallback((game: FullGame, phase: 'briefing' | 'game' = 'game') => {
     const now = Date.now()
     const own = playersRef.current.find((player) => player.id === selfRef.current.id)
     setView(viewForRole(game, own?.role || 'operator', now))
     meshRef.current?.broadcast((peerId): AppMessage => {
       const player = playersRef.current.find((candidate) => candidate.id === peerId)
-      return { type: 'state', view: viewForRole(game, player?.role || 'specialist', now) }
+      return { type: 'state', view: viewForRole(game, player?.role || 'specialist', now), phase }
     })
   }, [])
   const handleAction = useCallback((action: GameAction) => {
@@ -135,7 +135,7 @@ function App() {
     const message = event.data as AppMessage
     if (isHostRef.current && message.type === 'action') { const sender = playersRef.current.find((player) => player.id === event.peerId); if (sender?.role === 'operator') handleAction(message.action); return }
     if (!isHostRef.current && message.type === 'lobby') { commitPlayers(message.players); commitLanguage(message.language); commitDifficulty(message.difficulty); commitGameStyle(message.gameStyle); commitCampaignLevel(message.campaignLevel); setStatus('connected') }
-    if (!isHostRef.current && message.type === 'state') { setView(message.view); commitLanguage(message.view.language); setScreen('game') }
+    if (!isHostRef.current && message.type === 'state') { setView(message.view); commitLanguage(message.view.language); setScreen(message.phase || 'game') }
     if (!isHostRef.current && message.type === 'session-ended') { setStatus('sessionEnded'); setScreen('lobby') }
     if (!isHostRef.current && message.type === 'capacity') setStatus('capacity')
   }, [commitCampaignLevel, commitDifficulty, commitGameStyle, commitLanguage, commitPlayers, handleAction, sendLobby])
@@ -208,7 +208,14 @@ function App() {
     const seedBytes = new Uint32Array(1); crypto.getRandomValues(seedBytes)
     const game = createGame(seedBytes[0], active.length, languageRef.current, Date.now(), difficultyRef.current, gameStyleRef.current, campaignLevelRef.current)
     setNewBest(false)
-    gameRef.current = game; processedRef.current.clear(); setScreen('game'); hostBroadcastState(game)
+    const phase = game.gameStyle === 'campaign' ? 'briefing' : 'game'
+    gameRef.current = game; processedRef.current.clear(); setScreen(phase); hostBroadcastState(game, phase)
+  }
+  const beginMission = () => {
+    if (!isHost || !gameRef.current) return
+    const now = Date.now(); const game = gameRef.current
+    game.startedAt = now; game.endsAt = now + game.shiftRules.durationMs; game.lastPressureAt = now
+    setScreen('game'); hostBroadcastState(game, 'game')
   }
   const startNextCampaignLevel = () => { commitCampaignLevel(Math.min(campaignLevels.length, campaignLevelRef.current + 1)); startGame() }
   const leaveSession = () => {
@@ -225,6 +232,7 @@ function App() {
   if (screen === 'home') return <Home language={language} onLanguage={chooseLanguage} onCreate={createSession} />
   if (screen === 'lobby') return <Lobby players={players} isHost={isHost} status={ui(language).status[status]} copied={copied} language={language} difficulty={difficulty} gameStyle={gameStyle} campaignLevelId={campaignLevelId} campaignProgress={campaignProgress} recoveryCode={createRecoveryCode(campaignProgress)} onRestoreCampaign={restoreCampaign} onLanguage={chooseLanguage} onDifficulty={chooseDifficulty} onGameStyle={chooseGameStyle} onCampaignLevel={chooseCampaignLevel} onCopy={copyInvite} onStart={startGame} onLeave={leaveSession} />
   if (!view) return <Loading status={ui(language).status[status]} />
+  if (screen === 'briefing') return <MissionBriefing view={view} players={players} isHost={isHost} onBegin={beginMission} onLeave={leaveSession} />
   if (view.outcome !== 'playing') return <EndScreen view={view} isHost={isHost} bestScore={bestScore} newBest={newBest} onReplay={startGame} onNextCampaign={startNextCampaignLevel} onLeave={leaveSession} />
   return <GameScreen view={view} players={players} onAction={submitAction} onLeave={leaveSession} />
 }
@@ -233,6 +241,23 @@ function Brand({ compact = false }: { compact?: boolean }) { return <div classNa
 function LanguageSelector({ language, onChange, disabled = false }: { language: Locale; onChange: (language: Locale) => void; disabled?: boolean }) {
   const t = ui(language)
   return <div className="language-selector" aria-label={t.language}><span>{t.language}</span><div><button className={language === 'en' ? 'selected' : ''} onClick={() => onChange('en')} disabled={disabled}>EN</button><button className={language === 'de' ? 'selected' : ''} onClick={() => onChange('de')} disabled={disabled}>DE</button></div></div>
+}
+
+function MissionBriefing({ view, players, isHost, onBegin, onLeave }: { view: GameView; players: Player[]; isHost: boolean; onBegin: () => void; onLeave: () => void }) {
+  const t = ui(view.language); const level = campaignLevel(view.campaignLevel || 1)
+  const previous = level.id > 1 ? campaignLevel(level.id - 1).success[view.language] : (view.language === 'de' ? 'Die Nachtschicht beginnt mit einem schwachen Notsignal aus einem stillgelegten Relais.' : 'The night shift begins with a faint distress call from a decommissioned relay.')
+  const tasks = view.language === 'de' ? {
+    router: 'Öffnet den Weg, von dem dieses Kapitel abhängt. Frequenz, Spezies und Protokoll bestimmen die zwei sicheren Knoten.',
+    reactor: 'Haltet die Station lange genug am Leben, damit die Geschichte weitergehen kann. Telemetrie und Verfahren ergeben drei Reglerwerte.',
+    translation: 'Findet heraus, was die fremde Stimme wirklich sagt. Leserichtung, Glyphen und Stationszustand ergeben die Antwortfarben.',
+  } : {
+    router: 'Open the path this chapter depends on. Frequency, species, and protocol determine the two safe nodes.',
+    reactor: 'Keep the station alive long enough for the story to continue. Telemetry and procedure produce three dial values.',
+    translation: 'Discover what the alien voice is really saying. Reading direction, glyphs, and station condition produce the response colors.',
+  }
+  const moduleNames = { router: t.quantumRouter, reactor: t.reactorCalibration, translation: t.translationMatrix }
+  const ownRole = view.manual?.role || players.find(player => player.isHost)?.role || null
+  return <main className="mission-briefing-screen"><header><Brand compact /><button className="text-button" onClick={onLeave}>{t.leave}</button></header><section className="mission-dossier"><div className="dossier-stamp">{t.campaign} // {t.level} {level.id.toString().padStart(2, '0')} // {t.missionBriefing}</div><p className="kicker">{t.storySoFar}</p><p className="story-recap">{previous}</p><h1>{level.title[view.language]}</h1><p className="story-lede">{level.summary[view.language]} {level.briefing[view.language]}</p><div className="mission-facts"><article><small>{t.yourRole}</small><strong>{roleName(ownRole, view.language)}</strong><p>{t.roleStory}</p></article><article><small>{t.shiftWindow}</small><strong>{Math.round((view.endsAt - view.now) / 60000)} {t.minutes}</strong><p>{t.timerPaused}</p></article></div>{view.modifierText && <div className="dossier-alert"><b>⚠ {t.missionVariation}</b><p>{view.modifierText}</p></div>}{view.bonusText && <div className="dossier-bonus"><b>★ {t.optionalObjective}</b><p>{view.bonusText}</p></div>}<div className="mission-task-list"><small>{t.missionObjectives}</small>{view.activeModules.map((module, index) => <article key={module}><b>0{index + 1}</b><div><strong>{moduleNames[module]}</strong><p>{tasks[module]}</p></div></article>)}</div><div className="briefing-crew"><small>{t.assignedCrew}</small><div>{players.filter(player => player.connected).map(player => <span key={player.id}>{player.name}<b>{roleName(player.role, view.language)}</b></span>)}</div></div><div className="briefing-launch">{isHost ? <button className="primary" onClick={onBegin}>{t.beginMission}<b>→</b></button> : <p className="waiting">{t.waitingBriefing}</p>}<small>{t.readBeforeStart}</small></div></section></main>
 }
 
 function Home({ language, onLanguage, onCreate }: { language: Locale; onLanguage: (language: Locale) => void; onCreate: () => void }) {

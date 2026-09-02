@@ -249,7 +249,19 @@ export function applyAction(game: FullGame, action: GameAction, now = Date.now()
   const forgiven = !correct && next.gameStyle === 'campaign' && (next.campaignLevel || 99) <= 2 && !next.forgivenModules.includes(module)
   if (correct) {
     next.incidentsResolved += 1; next.stability = Math.min(100, next.stability + 6)
-    next.log.unshift(next.language === 'de' ? `${moduleNames[module]} gelöst. Jemand sollte das Ticket schließen, bevor es wieder aufgeht.` : `${moduleNames[module]} cleared. Someone close the ticket before it reopens.`)
+    if (next.gameStyle === 'campaign' && next.campaignLevel) {
+      const title = campaignLevel(next.campaignLevel).title[next.language]
+      const narrative = next.language === 'de' ? {
+        router: `Der Weg durch „${title}“ steht. Das Signal erreicht sein nächstes Ziel.`,
+        reactor: `Der Kern hält. „${title}“ hat wieder genug Energie, um weiterzugehen.`,
+        translation: `Die fremde Stimme ist verstanden. Ihre Nachricht wird Teil von „${title}“.`
+      } : {
+        router: `The path through “${title}” is open. The signal reaches its next destination.`,
+        reactor: `The core holds. “${title}” has enough power to continue.`,
+        translation: `The alien voice is understood. Its message becomes part of “${title}”.`
+      }
+      next.log.unshift(narrative[module])
+    } else next.log.unshift(next.language === 'de' ? `${moduleNames[module]} gelöst. Jemand sollte das Ticket schließen, bevor es wieder aufgeht.` : `${moduleNames[module]} cleared. Someone close the ticket before it reopens.`)
   } else if (forgiven) {
     next.forgivenModules.push(module)
     next.log.unshift(next.language === 'de' ? `Übungseingabe am ${moduleNames[module]} abgefangen. Kein Schaden – prüft die Hinweise und versucht es erneut.` : `Training input intercepted at ${moduleNames[module]}. No damage—check the guidance and try again.`)
