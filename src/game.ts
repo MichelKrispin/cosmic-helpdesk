@@ -114,7 +114,7 @@ export function rolesForPlayers(count: number): RoleId[] {
   if (count === 3) return ['operator', 'engineer', 'researcher']
   return ['operator', 'engineer', 'analyst', 'archivist']
 }
-export function roleName(role: RoleId | null, language: Locale = 'en'): string {
+export function roleName(role: RoleId | null, language: Locale = 'de'): string {
   const names: Record<Locale, Record<RoleId, string>> = {
     en: { operator: 'Operator', engineer: 'Systems Engineer', analyst: 'Telemetry Analyst', archivist: 'Xeno Archivist', specialist: 'Mission Specialist', researcher: 'Research Lead' },
     de: { operator: 'Operator', engineer: 'Systemingenieur', analyst: 'Telemetrieanalyst', archivist: 'Xeno-Archivar', specialist: 'Missionsspezialist', researcher: 'Forschungsleitung' },
@@ -122,7 +122,7 @@ export function roleName(role: RoleId | null, language: Locale = 'en'): string {
   return role ? names[language][role] : language === 'de' ? 'Zuweisung ausstehend' : 'Awaiting assignment'
 }
 
-export function createGame(seed: number, playerCount: number, language: Locale = 'en', now = Date.now(), difficulty: DifficultyId = 'standard', gameStyle: GameStyle = 'fast', campaignLevelId = 1): FullGame {
+export function createGame(seed: number, playerCount: number, language: Locale = 'de', now = Date.now(), difficulty: DifficultyId = 'standard', gameStyle: GameStyle = 'fast', campaignLevelId = 1): FullGame {
   const random = mulberry32(seed)
   const caller = species[Math.floor(random() * species.length)]
   const symbols = shuffle(Object.keys(symbolMeta) as SymbolId[], random)
