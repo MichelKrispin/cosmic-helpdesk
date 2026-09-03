@@ -7,6 +7,7 @@ const vite = await createServer({ server: { middlewareMode: true, hmr: false }, 
 try {
   const game = await vite.ssrLoadModule('/src/game.ts')
   const session = await vite.ssrLoadModule('/src/session.ts')
+  const campaignSave = await vite.ssrLoadModule('/src/campaign-save.ts')
 
   const startedAt = 1_000
   const state = game.createGame(1, 2, 'en', startedAt, 'standard', 'campaign', 1)
@@ -82,7 +83,56 @@ try {
   assert.equal(decodeRequestPath('/assets/game.js?cache=1'), '/assets/game.js')
   assert.equal(decodeRequestPath('/broken%path'), null)
 
-  console.log('Game regressions passed: deadlines, onboarding, follow-ups, surge grace, accessibility, reconnects, capacity, and request paths.')
+  const savedCampaign = {
+    progress: 10,
+    scores: [1200, 2400, 3600],
+    completedIntermissions: [1, 2, 4, 9],
+    archiveFragments: [4, 6, 9],
+  }
+  const recoveryCode = campaignSave.encodeCampaignRecovery(savedCampaign, game.campaignLevels.length)
+  assert.match(recoveryCode, /^CHD2-/)
+  assert.deepEqual(campaignSave.decodeCampaignRecovery(recoveryCode, game.campaignLevels.length), {
+    ...savedCampaign,
+    scores: [...savedCampaign.scores, ...Array(game.campaignLevels.length - savedCampaign.scores.length).fill(0)],
+  }, 'recovery must preserve scores, completed intermissions, and archive fragments')
+  const damagedRecovery = `${recoveryCode.slice(0, -1)}${recoveryCode.endsWith('0') ? '1' : '0'}`
+  assert.equal(campaignSave.decodeCampaignRecovery(damagedRecovery, game.campaignLevels.length), null, 'damaged recovery codes must fail their checksum')
+  assert.equal(campaignSave.nextCampaignProgress(4, 2, game.campaignLevels.length), 4, 'replaying an earlier mission must not reduce unlock progress')
+  assert.equal(campaignSave.nextCampaignProgress(4, 4, game.campaignLevels.length), 5, 'winning the current mission must unlock the next level')
+  assert.equal(campaignSave.nextCampaignProgress(16, 16, game.campaignLevels.length), 16, 'the final mission must not unlock an invalid level')
+
+  let verticalSliceProgress = 1
+  const viewedIntermissions = []
+  const unlockedFragments = []
+  for (let levelId = 1; levelId <= 4; levelId += 1) {
+    let mission = game.createGame(400 + levelId, 2, 'en', startedAt, 'standard', 'campaign', levelId)
+    if (mission.activeModules.includes('reactor')) mission = game.applyAction(mission, { id: `l${levelId}-reactor`, type: 'reactor-calibrate', dials: game.reactorSolution(mission) }, startedAt + 1)
+    if (mission.activeModules.includes('router')) {
+      const pair = game.routerSolution(mission)
+      const ids = pair.map(symbol => mission.router.nodes.find(node => node.symbol === symbol).id)
+      mission = game.applyAction(mission, { id: `l${levelId}-router`, type: 'router-connect', a: ids[0], b: ids[1] }, startedAt + 2)
+    }
+    if (mission.activeModules.includes('translation')) mission = game.applyAction(mission, { id: `l${levelId}-translation`, type: 'translation-submit', sequence: game.translationSolution(mission) }, startedAt + 3)
+    assert.equal(mission.outcome, 'won', `campaign level ${levelId} must be solvable in sequence`)
+    assert.equal(mission.endReason, game.campaignLevel(levelId).success.en, `campaign level ${levelId} must reveal its canonical success`)
+    verticalSliceProgress = campaignSave.nextCampaignProgress(verticalSliceProgress, levelId, game.campaignLevels.length)
+    viewedIntermissions.push(levelId)
+    if (game.campaignLevel(levelId).archiveFragment) unlockedFragments.push(levelId)
+  }
+  assert.equal(verticalSliceProgress, 5, 'the first four missions must unlock level five without gaps')
+  assert.deepEqual(viewedIntermissions, [1, 2, 3, 4])
+  assert.deepEqual(unlockedFragments, [4], 'the first act must recover exactly the first directive fragment')
+
+  const legacyScores = 'a.b.c'
+  const legacyPayload = `1|7|${legacyScores}`
+  let legacyHash = 2166136261
+  for (const character of legacyPayload) { legacyHash ^= character.charCodeAt(0); legacyHash = Math.imul(legacyHash, 16777619) }
+  const legacyChecksum = (legacyHash >>> 0).toString(36).toUpperCase().padStart(7, '0')
+  const legacy = campaignSave.decodeCampaignRecovery(`CHD1-7-${legacyScores}-${legacyChecksum}`, game.campaignLevels.length)
+  assert.equal(legacy.progress, 7, 'legacy CHD1 recovery codes must remain importable')
+  assert.deepEqual(legacy.archiveFragments, [4, 6], 'legacy story unlocks must be reconstructed from campaign progress')
+
+  console.log('Game regressions passed: deadlines, onboarding, follow-ups, surge grace, accessibility, reconnects, capacity, request paths, and campaign recovery.')
 } finally {
   await vite.close()
 }

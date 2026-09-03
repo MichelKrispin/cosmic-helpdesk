@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  advanceClock, applyAction, buttonLabel, buttonMarker, campaignLevel, campaignLevels, createGame, difficultyConfig, difficultyLabel, roleName, rolesForPlayers, symbolMeta, viewForRole,
+  advanceClock, applyAction, buttonLabel, buttonMarker, campaignLevel, campaignLevels, campaignLore, createGame, difficultyConfig, difficultyLabel, roleName, rolesForPlayers, symbolMeta, viewForRole,
   type ButtonColor, type DifficultyId, type FullGame, type GameAction, type GameActionInput, type GameStyle, type GameView, type Locale, type Player, type RoleId,
 } from './game'
+import { decodeCampaignRecovery, emptyCampaignStoryProgress, encodeCampaignRecovery, nextCampaignProgress, normalizeCampaignStoryProgress, type CampaignStoryProgress } from './campaign-save'
 import { ui, type StatusId } from './i18n'
 import { makeId, PeerMesh, type MeshEvent } from './network'
 import { reconnectOrAddPlayer } from './session'
 
-type Screen = 'home' | 'lobby' | 'briefing' | 'game'
+type Screen = 'home' | 'lobby' | 'briefing' | 'game' | 'intermission'
 type AppMessage =
   | { type: 'lobby'; players: Player[]; language: Locale; difficulty: DifficultyId; gameStyle: GameStyle; campaignLevel: number }
-  | { type: 'state'; view: GameView; phase?: 'briefing' | 'game' }
+  | { type: 'state'; view: GameView; phase?: 'briefing' | 'game' | 'intermission'; campaignStory?: CampaignStoryProgress }
   | { type: 'action'; action: GameAction }
   | { type: 'session-ended' }
   | { type: 'capacity' }
@@ -43,29 +44,17 @@ function formatTime(ms: number) {
 }
 
 const campaignProgressKey = 'cosmic-helpdesk-campaign-progress'
+const campaignStoryKey = 'cosmic-helpdesk-campaign-story'
 const campaignScoreKey = (level: number) => `cosmic-helpdesk-best-campaign-${level}`
 
-function campaignChecksum(value: string) {
-  let hash = 2166136261
-  for (const character of value) { hash ^= character.charCodeAt(0); hash = Math.imul(hash, 16777619) }
-  return (hash >>> 0).toString(36).toUpperCase().padStart(7, '0')
+function readStoredCampaignStory() {
+  try { return normalizeCampaignStoryProgress(JSON.parse(localStorage.getItem(campaignStoryKey) || 'null'), campaignLevels.length) }
+  catch { return { ...emptyCampaignStoryProgress } }
 }
 
-function createRecoveryCode(progress: number) {
-  const scores = campaignLevels.map(level => Math.max(0, Number(localStorage.getItem(campaignScoreKey(level.id))) || 0).toString(36)).join('.')
-  const payload = `1|${progress.toString(36)}|${scores}`
-  return `CHD1-${progress.toString(36).toUpperCase()}-${scores.toUpperCase()}-${campaignChecksum(payload)}`
-}
-
-function readRecoveryCode(code: string) {
-  const match = code.trim().toLowerCase().match(/^chd1-([0-9a-z]+)-([0-9a-z.]+)-([0-9a-z]+)$/)
-  if (!match) return null
-  const progress = Number.parseInt(match[1], 36)
-  const scoreParts = match[2].split('.')
-  const scores = scoreParts.map(score => Number.parseInt(score, 36))
-  const payload = `1|${match[1]}|${match[2]}`
-  if (campaignChecksum(payload).toLowerCase() !== match[3] || !Number.isInteger(progress) || progress < 1 || progress > campaignLevels.length || scores.length > campaignLevels.length || scores.some(score => !Number.isSafeInteger(score) || score < 0)) return null
-  return { progress, scores: [...scores, ...Array(campaignLevels.length - scores.length).fill(0)] }
+function createRecoveryCode(progress: number, story: CampaignStoryProgress) {
+  const scores = campaignLevels.map(level => Math.max(0, Number(localStorage.getItem(campaignScoreKey(level.id))) || 0))
+  return encodeCampaignRecovery({ progress, scores, ...story }, campaignLevels.length)
 }
 
 function App() {
@@ -80,6 +69,7 @@ function App() {
   const [gameStyle, setGameStyle] = useState<GameStyle>('campaign')
   const [campaignLevelId, setCampaignLevelId] = useState(1)
   const [campaignProgress, setCampaignProgress] = useState(() => Math.max(1, Math.min(campaignLevels.length, Number(localStorage.getItem(campaignProgressKey)) || 1)))
+  const [campaignStory, setCampaignStory] = useState<CampaignStoryProgress>(readStoredCampaignStory)
   const [copied, setCopied] = useState(false)
   const [bestScore, setBestScore] = useState(0)
   const [newBest, setNewBest] = useState(false)
@@ -92,6 +82,7 @@ function App() {
   const difficultyRef = useRef<DifficultyId>('standard')
   const gameStyleRef = useRef<GameStyle>('campaign')
   const campaignLevelRef = useRef(1)
+  const campaignStoryRef = useRef(campaignStory)
   const sessionRef = useRef<{ sessionId: string; hostId: string } | null>(initialInvite)
   const processedRef = useRef(new Set<string>())
   const screenRef = useRef<Screen>(initialInvite ? 'lobby' : 'home')
@@ -101,17 +92,25 @@ function App() {
   const commitDifficulty = useCallback((next: DifficultyId) => { difficultyRef.current = next; setDifficulty(next) }, [])
   const commitGameStyle = useCallback((next: GameStyle) => { gameStyleRef.current = next; setGameStyle(next) }, [])
   const commitCampaignLevel = useCallback((next: number) => { campaignLevelRef.current = next; setCampaignLevelId(next) }, [])
+  const commitCampaignStory = useCallback((update: CampaignStoryProgress | ((current: CampaignStoryProgress) => CampaignStoryProgress)) => {
+    const next = normalizeCampaignStoryProgress(typeof update === 'function' ? update(campaignStoryRef.current) : update, campaignLevels.length)
+    campaignStoryRef.current = next; setCampaignStory(next); localStorage.setItem(campaignStoryKey, JSON.stringify(next))
+  }, [])
+  const receiveCampaignStory = useCallback((next: CampaignStoryProgress) => {
+    const normalized = normalizeCampaignStoryProgress(next, campaignLevels.length)
+    campaignStoryRef.current = normalized; setCampaignStory(normalized)
+  }, [])
   const commitScreen = useCallback((next: Screen) => { screenRef.current = next; setScreen(next) }, [])
   const sendLobby = useCallback((next = playersRef.current, nextLanguage = languageRef.current, nextDifficulty = difficultyRef.current, nextStyle = gameStyleRef.current, nextLevel = campaignLevelRef.current) => {
     meshRef.current?.broadcast((): AppMessage => ({ type: 'lobby', players: next, language: nextLanguage, difficulty: nextDifficulty, gameStyle: nextStyle, campaignLevel: nextLevel }))
   }, [])
-  const hostBroadcastState = useCallback((game: FullGame, phase: 'briefing' | 'game' = 'game') => {
+  const hostBroadcastState = useCallback((game: FullGame, phase: 'briefing' | 'game' | 'intermission' = 'game') => {
     const now = Date.now()
     const own = playersRef.current.find((player) => player.id === selfRef.current.id)
     setView(viewForRole(game, own?.role || 'operator', now))
     meshRef.current?.broadcast((peerId): AppMessage => {
       const player = playersRef.current.find((candidate) => candidate.id === peerId)
-      return { type: 'state', view: viewForRole(game, player?.role || 'specialist', now), phase }
+      return { type: 'state', view: viewForRole(game, player?.role || 'specialist', now), phase, campaignStory: campaignStoryRef.current }
     })
   }, [])
   const handleAction = useCallback((action: GameAction) => {
@@ -132,8 +131,8 @@ function App() {
         if (!result.accepted) { meshRef.current?.send(event.peerId, { type: 'capacity' } satisfies AppMessage); return }
         commitPlayers(result.players)
         if (gameRef.current && existing?.role) {
-          const phase = screenRef.current === 'briefing' ? 'briefing' : 'game'
-          meshRef.current?.send(event.peerId, { type: 'state', view: viewForRole(gameRef.current, existing.role), phase } satisfies AppMessage)
+          const phase = screenRef.current === 'briefing' || screenRef.current === 'intermission' ? screenRef.current : 'game'
+          meshRef.current?.send(event.peerId, { type: 'state', view: viewForRole(gameRef.current, existing.role), phase, campaignStory: campaignStoryRef.current } satisfies AppMessage)
         } else queueMicrotask(() => sendLobby(result.players))
       }
       return
@@ -147,10 +146,10 @@ function App() {
     const message = event.data as AppMessage
     if (isHostRef.current && message.type === 'action') { const sender = playersRef.current.find((player) => player.id === event.peerId); if (sender?.role === 'operator') handleAction(message.action); return }
     if (!isHostRef.current && message.type === 'lobby') { commitPlayers(message.players); commitLanguage(message.language); commitDifficulty(message.difficulty); commitGameStyle(message.gameStyle); commitCampaignLevel(message.campaignLevel); setStatus('connected') }
-    if (!isHostRef.current && message.type === 'state') { setView(message.view); commitLanguage(message.view.language); commitScreen(message.phase || 'game') }
+    if (!isHostRef.current && message.type === 'state') { setView(message.view); commitLanguage(message.view.language); if (message.campaignStory) receiveCampaignStory(message.campaignStory); commitScreen(message.phase || 'game') }
     if (!isHostRef.current && message.type === 'session-ended') { setStatus('sessionEnded'); commitScreen('lobby') }
     if (!isHostRef.current && message.type === 'capacity') setStatus('capacity')
-  }, [commitCampaignLevel, commitDifficulty, commitGameStyle, commitLanguage, commitPlayers, commitScreen, handleAction, sendLobby])
+  }, [commitCampaignLevel, commitDifficulty, commitGameStyle, commitLanguage, commitPlayers, commitScreen, handleAction, receiveCampaignStory, sendLobby])
 
   const createSession = useCallback(() => {
     meshRef.current?.close()
@@ -183,14 +182,15 @@ function App() {
     if (best > previous) localStorage.setItem(key, String(best))
     setBestScore(best); setNewBest(view.score > previous)
     if (isHostRef.current && view.outcome === 'won' && view.gameStyle === 'campaign' && view.campaignLevel) {
-      const unlocked = Math.min(campaignLevels.length, view.campaignLevel + 1)
+      const completedLevel = view.campaignLevel
       setCampaignProgress(previousProgress => {
-        const next = Math.max(previousProgress, unlocked)
+        const next = nextCampaignProgress(previousProgress, completedLevel, campaignLevels.length)
         localStorage.setItem(campaignProgressKey, String(next))
         return next
       })
+      if (campaignLevel(completedLevel).archiveFragment) commitCampaignStory(current => ({ ...current, archiveFragments: [...current.archiveFragments, completedLevel] }))
     }
-  }, [view?.campaignLevel, view?.difficulty, view?.gameStyle, view?.outcome, view?.score])
+  }, [commitCampaignStory, view?.campaignLevel, view?.difficulty, view?.gameStyle, view?.outcome, view?.score])
 
   const copyInvite = async () => {
     try { await navigator.clipboard.writeText(location.href) }
@@ -203,10 +203,11 @@ function App() {
   const chooseCampaignLevel = (next: number) => { if (!isHost || next > campaignProgress) return; commitCampaignLevel(next); sendLobby(playersRef.current, languageRef.current, difficultyRef.current, gameStyleRef.current, next) }
   const restoreCampaign = (code: string) => {
     if (!isHost) return false
-    const save = readRecoveryCode(code)
+    const save = decodeCampaignRecovery(code, campaignLevels.length)
     if (!save) return false
     localStorage.setItem(campaignProgressKey, String(save.progress))
     save.scores.forEach((score, index) => localStorage.setItem(campaignScoreKey(index + 1), String(score)))
+    commitCampaignStory({ completedIntermissions: save.completedIntermissions, archiveFragments: save.archiveFragments })
     setCampaignProgress(save.progress); commitCampaignLevel(save.progress)
     sendLobby(playersRef.current, languageRef.current, difficultyRef.current, gameStyleRef.current, save.progress)
     return true
@@ -229,7 +230,15 @@ function App() {
     game.startedAt = now; game.endsAt = now + game.shiftRules.durationMs; game.lastPressureAt = now
     commitScreen('game'); hostBroadcastState(game, 'game')
   }
-  const startNextCampaignLevel = () => { commitCampaignLevel(Math.min(campaignLevels.length, campaignLevelRef.current + 1)); startGame() }
+  const openIntermission = () => {
+    if (!isHost || !gameRef.current || gameRef.current.outcome !== 'won') return
+    commitScreen('intermission'); hostBroadcastState(gameRef.current, 'intermission')
+  }
+  const startNextCampaignLevel = () => {
+    const completedLevel = gameRef.current?.campaignLevel
+    if (completedLevel) commitCampaignStory(current => ({ ...current, completedIntermissions: [...current.completedIntermissions, completedLevel] }))
+    commitCampaignLevel(Math.min(campaignLevels.length, campaignLevelRef.current + 1)); startGame()
+  }
   const leaveSession = () => {
     if (isHost) meshRef.current?.broadcast((): AppMessage => ({ type: 'session-ended' }))
     meshRef.current?.close(); meshRef.current = null; gameRef.current = null; setView(null); setPlayers([]); setIsHost(false); setStatus('empty'); commitScreen('home')
@@ -242,10 +251,11 @@ function App() {
   }
 
   if (screen === 'home') return <Home language={language} onLanguage={chooseLanguage} onCreate={createSession} />
-  if (screen === 'lobby') return <Lobby players={players} isHost={isHost} status={ui(language).status[status]} copied={copied} language={language} difficulty={difficulty} gameStyle={gameStyle} campaignLevelId={campaignLevelId} campaignProgress={campaignProgress} recoveryCode={createRecoveryCode(campaignProgress)} onRestoreCampaign={restoreCampaign} onLanguage={chooseLanguage} onDifficulty={chooseDifficulty} onGameStyle={chooseGameStyle} onCampaignLevel={chooseCampaignLevel} onCopy={copyInvite} onStart={startGame} onLeave={leaveSession} />
+  if (screen === 'lobby') return <Lobby players={players} isHost={isHost} status={ui(language).status[status]} copied={copied} language={language} difficulty={difficulty} gameStyle={gameStyle} campaignLevelId={campaignLevelId} campaignProgress={campaignProgress} recoveryCode={createRecoveryCode(campaignProgress, campaignStory)} onRestoreCampaign={restoreCampaign} onLanguage={chooseLanguage} onDifficulty={chooseDifficulty} onGameStyle={chooseGameStyle} onCampaignLevel={chooseCampaignLevel} onCopy={copyInvite} onStart={startGame} onLeave={leaveSession} />
   if (!view) return <Loading status={ui(language).status[status]} />
   if (screen === 'briefing') return <MissionBriefing view={view} players={players} selfId={selfRef.current.id} isHost={isHost} onBegin={beginMission} onLeave={leaveSession} />
-  if (view.outcome !== 'playing') return <EndScreen view={view} isHost={isHost} bestScore={bestScore} newBest={newBest} onReplay={startGame} onNextCampaign={startNextCampaignLevel} onLeave={leaveSession} />
+  if (screen === 'intermission') return <NightShiftDesktop view={view} campaignStory={campaignStory} isHost={isHost} onContinue={startNextCampaignLevel} onLeave={leaveSession} />
+  if (view.outcome !== 'playing') return <EndScreen view={view} isHost={isHost} bestScore={bestScore} newBest={newBest} onReplay={startGame} onNextCampaign={openIntermission} onLeave={leaveSession} />
   return <GameScreen view={view} players={players} selfId={selfRef.current.id} onAction={submitAction} onLeave={leaveSession} />
 }
 
@@ -269,9 +279,10 @@ function MissionBriefing({ view, players, selfId, isHost, onBegin, onLeave }: { 
     translation: 'Discover what the alien voice is really saying. Reading direction, glyphs, and station condition produce the response colors.',
   }
   const moduleNames = { router: t.quantumRouter, reactor: t.reactorCalibration, translation: t.translationMatrix }
+  const storyLabels = view.language === 'de' ? { caller: 'ANRUFER', objective: 'EINSATZZIEL' } : { caller: 'CALLER', objective: 'MISSION OUTCOME' }
   const ownRole = view.manual?.role || players.find(player => player.isHost)?.role || null
   players = [...players].sort((a, b) => Number(b.id === selfId) - Number(a.id === selfId)).map(player => player.id === selfId ? { ...player, name: `▶ ${player.name} · ${t.youAre}` } : player)
-  return <main className="mission-briefing-screen"><header><Brand compact /><button className="text-button" onClick={onLeave}>{t.leave}</button></header><section className="mission-dossier"><div className="dossier-stamp">{t.campaign} // {t.level} {level.id.toString().padStart(2, '0')} // {t.missionBriefing}</div><p className="kicker">{t.storySoFar}</p><p className="story-recap">{previous}</p><h1>{level.title[view.language]}</h1><p className="story-lede">{level.summary[view.language]} {level.briefing[view.language]}</p><div className="mission-facts"><article><small>{t.yourRole}</small><strong>{roleName(ownRole, view.language)}</strong><p>{t.roleStory}</p></article><article><small>{t.shiftWindow}</small><strong>{Math.round((view.endsAt - view.now) / 60000)} {t.minutes}</strong><p>{t.timerPaused}</p></article></div>{view.modifierText && <div className="dossier-alert"><b>⚠ {t.missionVariation}</b><p>{view.modifierText}</p></div>}{view.bonusText && <div className="dossier-bonus"><b>★ {t.optionalObjective}</b><p>{view.bonusText}</p></div>}<div className="mission-task-list"><small>{t.missionObjectives}</small>{view.activeModules.map((module, index) => <article key={module}><b>0{index + 1}</b><div><strong>{moduleNames[module]}</strong><p>{tasks[module]}</p></div></article>)}</div><div className="briefing-crew"><small>{t.assignedCrew}</small><div>{players.filter(player => player.connected).map(player => <span key={player.id}>{player.name}<b>{roleName(player.role, view.language)}</b></span>)}</div></div><div className="briefing-launch">{isHost ? <button className="primary" onClick={onBegin}>{t.beginMission}<b>→</b></button> : <p className="waiting">{t.waitingBriefing}</p>}<small>{t.readBeforeStart}</small></div></section></main>
+  return <main className="mission-briefing-screen"><header><Brand compact /><button className="text-button" onClick={onLeave}>{t.leave}</button></header><section className="mission-dossier"><div className="dossier-stamp">{t.campaign} // {t.level} {level.id.toString().padStart(2, '0')} // {t.missionBriefing}</div><p className="kicker">{t.storySoFar}</p><p className="story-recap">{previous}</p><h1>{level.title[view.language]}</h1><p className="story-lede">{level.summary[view.language]} {level.briefing[view.language]}</p><div className="mission-facts"><article><small>{storyLabels.caller}</small><strong>{level.caller[view.language]}</strong><p>{level.summary[view.language]}</p></article><article><small>{storyLabels.objective}</small><strong>{level.objective[view.language]}</strong><p>{t.timerPaused}</p></article><article><small>{t.yourRole}</small><strong>{roleName(ownRole, view.language)}</strong><p>{t.roleStory}</p></article><article><small>{t.shiftWindow}</small><strong>{Math.round((view.endsAt - view.now) / 60000)} {t.minutes}</strong><p>{t.timerPaused}</p></article></div>{view.modifierText && <div className="dossier-alert"><b>⚠ {t.missionVariation}</b><p>{view.modifierText}</p></div>}{view.bonusText && <div className="dossier-bonus"><b>★ {t.optionalObjective}</b><p>{view.bonusText}</p></div>}<div className="mission-task-list"><small>{t.missionObjectives}</small>{view.activeModules.map((module, index) => <article key={module}><b>0{index + 1}</b><div><strong>{moduleNames[module]}</strong><p>{level.moduleOutcomes[module]?.[view.language] || tasks[module]}</p></div></article>)}</div><div className="briefing-crew"><small>{t.assignedCrew}</small><div>{players.filter(player => player.connected).map(player => <span key={player.id}>{player.name}<b>{roleName(player.role, view.language)}</b></span>)}</div></div><div className="briefing-launch">{isHost ? <button className="primary" onClick={onBegin}>{t.beginMission}<b>→</b></button> : <p className="waiting">{t.waitingBriefing}</p>}<small>{t.readBeforeStart}</small></div></section></main>
 }
 
 function Home({ language, onLanguage, onCreate }: { language: Locale; onLanguage: (language: Locale) => void; onCreate: () => void }) {
@@ -370,10 +381,59 @@ function SpecialistConsole({ view, role }: { view: GameView; role: RoleId | null
 }
 
 function EventLog({ view }: { view: GameView }) { const t = ui(view.language); return <section className="event-log"><span>{t.shiftLog}</span><div>{view.log.map((entry, index) => <p key={`${entry}-${index}`}><b>{index === 0 ? t.now : `−${index}`}</b>{entry}</p>)}</div></section> }
+
+type DesktopMessage = { sender: string; body: string; tone: 'system' | 'mara' | 'relay' | 'assembly' }
+
+function desktopMessages(levelId: number, language: Locale): DesktopMessage[] {
+  const de = language === 'de'
+  const scripted: Record<number, DesktopMessage[]> = {
+    1: [
+      { sender: 'SHIFT 404 BOT', body: de ? 'TICKET 001 GELÖST // ANRUFER-ID WIEDERHERGESTELLT' : 'TICKET 001 RESOLVED // CALLER ID RECOVERED', tone: 'system' },
+      { sender: 'MARA VALE // MV-404-0214', body: de ? 'Danke. Bitte schließt dieses Ticket nicht. Ich beginne meine Schicht morgen – an eurem Arbeitsplatz.' : 'Thank you. Please do not close this ticket. My shift starts tomorrow—at your desk.', tone: 'mara' },
+      { sender: 'TIMESTAMP VALIDATION', body: de ? 'EMPFANGEN: MORGEN, 02:14 STATIONSZEIT' : 'RECEIVED: TOMORROW, 02:14 STATION TIME', tone: 'system' },
+    ],
+    2: [
+      { sender: 'MARA VALE', body: de ? 'Der Dienstplan ist echt. Wenn ihr mich dort seht, habe ich noch nicht angerufen. Kompliziert, ich weiß.' : 'The roster is real. If you see me there, I have not called yet. Complicated, I know.', tone: 'mara' },
+      { sender: 'ARCHIVE SERVICE', body: de ? 'ANHANG ERKANNT // VERSIEGELTES TICKET: ARCHIV 404' : 'ATTACHMENT DETECTED // SEALED TICKET: ARCHIVE 404', tone: 'system' },
+    ],
+    3: [
+      { sender: 'ARCHIVE 404', body: de ? 'QUARANTÄNEGRUND: UNBEFUGTE BEWAHRUNG BEWOHNTER SYSTEME' : 'QUARANTINE CAUSE: UNAUTHORIZED PRESERVATION OF INHABITED SYSTEMS', tone: 'system' },
+      { sender: 'MARA VALE', body: de ? 'Bei uns ist dieses Archiv leer. Jemand hat die Vergangenheit aufgeräumt.' : 'In our shift, that archive is empty. Someone cleaned up the past.', tone: 'mara' },
+      { sender: 'SIGNATURE MONITOR', body: de ? 'GESCHWÄRZTER ABSENDER REAKTIVIERT' : 'REDACTED SENDER REACTIVATED', tone: 'system' },
+    ],
+    4: [
+      { sender: 'MARA VALE', body: de ? 'Etwas antwortet jetzt mit meiner Stimme. Fragt uns: „Wie viele ruhige Nächte?“ Ich kenne die Antwort.' : 'Something is answering in my voice now. Ask us: “How many quiet nights?” I know the answer.', tone: 'mara' },
+      { sender: 'UNKNOWN CALLER', body: de ? 'Eine. Bitte öffnet die Verbindung.' : 'One. Please open the connection.', tone: 'relay' },
+      { sender: 'UNKNOWN CALLER', body: de ? 'Keine. Wir sind der Helpdesk.' : 'None. We work helpdesk.', tone: 'mara' },
+    ],
+  }
+  const level = campaignLevel(levelId)
+  const next = campaignLevel(Math.min(campaignLevels.length, levelId + 1))
+  const messages = scripted[levelId] || [
+    { sender: levelId === 12 ? (de ? 'DIE TÜR' : 'THE DOOR') : 'SHIFT 404 BOT', body: level.success[language], tone: levelId === 12 ? 'relay' : 'system' },
+  ]
+  if (levelId < campaignLevels.length) messages.push({ sender: 'TICKET QUEUE', body: `${de ? 'EINGEHEND' : 'INCOMING'} // ${String(next.id).padStart(3, '0')} // ${next.title[language]} — ${level.transition[language]}`, tone: 'system' })
+  else messages.push({ sender: de ? 'EINE TÜR, DIE FRAGEN MUSS' : 'A DOOR THAT MUST ASK', body: de ? 'Eine ungeöffnete Route bleibt. Darf ich sie öffnen?' : 'One unopened route remains. May I open it?', tone: 'relay' })
+  return messages
+}
+
+function NightShiftDesktop({ view, campaignStory, isHost, onContinue, onLeave }: { view: GameView; campaignStory: CampaignStoryProgress; isHost: boolean; onContinue: () => void; onLeave: () => void }) {
+  const levelId = view.campaignLevel || 1; const level = campaignLevel(levelId); const language = view.language; const de = language === 'de'
+  const next = levelId < campaignLevels.length ? campaignLevel(levelId + 1) : null
+  const queue = campaignLevels.filter(item => item.id >= Math.max(1, levelId - 1) && item.id <= Math.min(campaignLevels.length, levelId + 2))
+  const fragments = campaignLevels.filter(item => campaignStory.archiveFragments.includes(item.id) && item.archiveFragment)
+  const report = view.incorrectActions === 0
+    ? (de ? `Saubere Lösung. ${view.stability}% Stabilität; ${view.incidentsResolved}/${view.targetIncidents} Vorgänge bestätigt.` : `Clean resolution. ${view.stability}% stability; ${view.incidentsResolved}/${view.targetIncidents} procedures verified.`)
+    : (de ? `${view.incorrectActions} Fehlversuch${view.incorrectActions === 1 ? '' : 'e'} simuliert; Kanon unverändert. Endstabilität: ${view.stability}%.` : `${view.incorrectActions} failed ${view.incorrectActions === 1 ? 'attempt' : 'attempts'} simulated; canon unchanged. Final stability: ${view.stability}%.`)
+  const bonusReport = view.bonusText ? `${de ? 'Bonusziel' : 'Bonus objective'}: ${view.bonusEarned ? (de ? 'erreicht' : 'achieved') : (de ? 'nicht erreicht' : 'not achieved')}.` : ''
+  return <main className="desktop-screen"><header><Brand compact /><span>{de ? 'NACHTSCHICHT-DESKTOP' : 'NIGHT SHIFT DESKTOP'} // 02:14</span><button className="text-button" onClick={onLeave}>{de ? 'SITZUNG VERLASSEN' : 'LEAVE SESSION'}</button></header><section className="desktop-grid"><aside className="ticket-window"><div className="window-title"><span>{de ? 'TICKET-WARTESCHLANGE' : 'TICKET QUEUE'}</span><b>{String(queue.length).padStart(2, '0')}</b></div><div className="ticket-list">{queue.map(item => { const status = item.id < levelId ? 'resolved' : item.id === levelId ? 'resolved current' : item.id === levelId + 1 ? 'incoming' : 'locked'; return <article key={item.id} className={status}><i>{item.id <= levelId ? '✓' : item.id === levelId + 1 ? '!' : '×'}</i><div><small>{de ? 'TICKET' : 'TICKET'} {String(item.id).padStart(3, '0')}</small><strong>{item.title[language]}</strong><span>{item.id <= levelId ? (de ? 'GELÖST' : 'RESOLVED') : item.id === levelId + 1 ? (de ? 'EINGEHEND' : 'INCOMING') : (de ? 'GESPERRT' : 'LOCKED')}</span></div></article> })}</div><div className="incident-report"><small>{de ? 'AUTOMATISCHER VORFALLSBERICHT' : 'AUTOMATED INCIDENT REPORT'}</small><p>{report} {bonusReport}</p></div></aside><section className="chat-window"><div className="window-title"><span>CREW CHAT // #SHIFT-404</span><i /></div><div className="chat-feed" role="log" aria-live="polite">{desktopMessages(levelId, language).map((message, index) => <article key={`${message.sender}-${index}`} className={`chat-message ${message.tone}`} style={{ animationDelay: `${index * 180}ms` }}><small>{message.sender}</small><p>{message.body}</p></article>)}</div><div className="chat-compose"><span>{de ? 'Antworten sind während einer Eskalation gesperrt.' : 'Replies locked during escalation.'}</span><button disabled>{de ? 'SENDEN' : 'SEND'}</button></div></section><aside className="archive-window"><div className="window-title"><span>{de ? 'WIEDERHERGESTELLTES ARCHIV' : 'RECOVERED ARCHIVE'}</span><b>{fragments.length}/4</b></div><div className="fragment-list">{fragments.length ? fragments.map(fragment => <article key={fragment.id}><small>{de ? 'DIREKTIVENFRAGMENT' : 'DIRECTIVE FRAGMENT'} {fragments.indexOf(fragment) + 1}</small><strong>{fragment.archiveFragment![language]}</strong><span>{de ? `Geborgen in Ticket ${fragment.id}` : `Recovered in ticket ${fragment.id}`}</span></article>) : <p>{de ? 'Noch keine lesbaren Fragmente.' : 'No readable fragments yet.'}</p>}</div><div className="desktop-next"><small>{next ? (de ? 'NÄCHSTE ESKALATION' : 'NEXT ESCALATION') : (de ? 'SCHICHT BEENDET' : 'SHIFT COMPLETE')}</small><strong>{next ? next.title[language] : campaignLore.title[language]}</strong>{isHost ? <button className="primary" onClick={onContinue}>{next ? (de ? 'TICKET ÖFFNEN' : 'OPEN TICKET') : (de ? 'FINALE WIEDERHOLEN' : 'REPLAY FINAL TICKET')} <b>→</b></button> : <p className="waiting">{de ? 'Warte auf den Host…' : 'Waiting for the host…'}</p>}</div></aside></section></main>
+}
+
 function EndScreen({ view, isHost, bestScore, newBest, onReplay, onNextCampaign, onLeave }: { view: GameView; isHost: boolean; bestScore: number; newBest: boolean; onReplay: () => void; onNextCampaign: () => void; onLeave: () => void }) {
-  const t = ui(view.language); const won = view.outcome === 'won'; const hasNextCampaignLevel = view.gameStyle === 'campaign' && !!view.campaignLevel && view.campaignLevel < campaignLevels.length
+  const t = ui(view.language); const won = view.outcome === 'won'; const hasCampaignIntermission = won && view.gameStyle === 'campaign' && !!view.campaignLevel
   const runLabel = view.gameStyle === 'campaign' && view.campaignLevel ? `${t.campaign} · ${t.level} ${view.campaignLevel}` : `${t.fastGame} · ${difficultyLabel(view.difficulty, view.language)}`
-  return <main className={`end-screen ${won ? 'victory' : 'defeat'}`}><div className="end-card"><Brand /><span className="end-stamp">{runLabel} // {won ? t.passable : t.catastrophic}</span><div className="end-icon">{won ? '✓' : '×'}</div><p className="kicker">{won ? t.alive : t.offline}</p><h1>{won ? t.success : t.failure}</h1><p className="end-reason">{view.endReason}</p>{view.gameStyle === 'campaign' && view.campaignLevel && <div className="end-campaign-route">{campaignLevels.map(level => <i key={level.id} className={level.id < view.campaignLevel! || (won && level.id === view.campaignLevel) ? 'complete' : level.id === view.campaignLevel ? 'current' : ''}>{level.id}</i>)}</div>}<div className="final-score"><span>{newBest ? t.newBest : t.crewScore}</span><strong>{view.score.toLocaleString()}</strong><small>{t.best}: {bestScore.toLocaleString()}</small></div><div className="stats-grid"><div><span>{t.incidentsResolved}</span><strong>{view.incidentsResolved} / {view.targetIncidents}</strong></div><div><span>{t.incorrectActions}</span><strong>{view.incorrectActions}</strong></div><div><span>{t.systemsDamaged}</span><strong>{view.damagedSystems}</strong></div><div><span>{t.finalStability}</span><strong>{view.stability}%</strong></div><div className="wide"><span>{t.unauthorizedWormholes}</span><strong>{view.unauthorizedWormholes}</strong></div></div><div className="end-actions">{isHost ? <button className="primary" onClick={won && hasNextCampaignLevel ? onNextCampaign : onReplay}>{won && hasNextCampaignLevel ? t.nextLevel : t.replay} <b>{won && hasNextCampaignLevel ? '→' : '↻'}</b></button> : <p className="waiting">{t.waitingReplay}</p>}<button className="secondary" onClick={onLeave}>{t.returnDesk}</button></div><small>{t.seed} {view.seed.toString(16).toUpperCase().padStart(8, '0')}</small></div></main>
+  const desktopLabel = view.language === 'de' ? 'DESKTOP ÖFFNEN' : 'OPEN DESKTOP'
+  return <main className={`end-screen ${won ? 'victory' : 'defeat'}`}><div className="end-card"><Brand /><span className="end-stamp">{runLabel} // {won ? t.passable : t.catastrophic}</span><div className="end-icon">{won ? '✓' : '×'}</div><p className="kicker">{won ? t.alive : t.offline}</p><h1>{won ? t.success : t.failure}</h1><p className="end-reason">{view.endReason}</p>{view.gameStyle === 'campaign' && view.campaignLevel && <div className="end-campaign-route">{campaignLevels.map(level => <i key={level.id} className={level.id < view.campaignLevel! || (won && level.id === view.campaignLevel) ? 'complete' : level.id === view.campaignLevel ? 'current' : ''}>{level.id}</i>)}</div>}<div className="final-score"><span>{newBest ? t.newBest : t.crewScore}</span><strong>{view.score.toLocaleString()}</strong><small>{t.best}: {bestScore.toLocaleString()}</small></div><div className="stats-grid"><div><span>{t.incidentsResolved}</span><strong>{view.incidentsResolved} / {view.targetIncidents}</strong></div><div><span>{t.incorrectActions}</span><strong>{view.incorrectActions}</strong></div><div><span>{t.systemsDamaged}</span><strong>{view.damagedSystems}</strong></div><div><span>{t.finalStability}</span><strong>{view.stability}%</strong></div><div className="wide"><span>{t.unauthorizedWormholes}</span><strong>{view.unauthorizedWormholes}</strong></div></div><div className="end-actions">{isHost ? <button className="primary" onClick={hasCampaignIntermission ? onNextCampaign : onReplay}>{hasCampaignIntermission ? desktopLabel : t.replay} <b>{hasCampaignIntermission ? '→' : '↻'}</b></button> : <p className="waiting">{t.waitingReplay}</p>}<button className="secondary" onClick={onLeave}>{t.returnDesk}</button></div><small>{t.seed} {view.seed.toString(16).toUpperCase().padStart(8, '0')}</small></div></main>
 }
 
 export default App
