@@ -48,6 +48,49 @@ try {
   assert.equal(followUp.outcome, 'won')
   assert.equal(followUp.incidentsResolved, followUp.targetIncidents)
 
+  const authLevel = game.createGame(505, 4, 'en', startedAt, 'standard', 'campaign', 5)
+  const authRepeat = game.createGame(505, 4, 'en', startedAt, 'standard', 'campaign', 5)
+  assert.deepEqual(authLevel.authentication, authRepeat.authentication, 'authentication candidates must be deterministic for a campaign seed')
+  assert.deepEqual(new Set(authLevel.authentication.candidates.map(candidate => candidate.kind)), new Set(['genuine', 'relay-generated', 'corrupted']), 'authentication must include genuine, relay-generated, and corrupted candidates')
+  const wrongCandidate = authLevel.authentication.candidates.find(candidate => candidate.kind === 'relay-generated')
+  const rejectedCaller = game.applyAction(authLevel, { id: 'wrong-caller', type: 'authentication-submit', candidateId: wrongCandidate.id }, startedAt + 1)
+  assert.equal(rejectedCaller.authentication.resolved, false)
+  assert.equal(rejectedCaller.stability, 85, 'accepting an imitation must damage stability')
+  const verifiedCaller = game.applyAction(authLevel, { id: 'real-caller', type: 'authentication-submit', candidateId: game.authenticationSolution(authLevel) }, startedAt + 1)
+  assert.equal(verifiedCaller.authentication.resolved, true)
+  assert.match(verifiedCaller.log[0], /real Mara/)
+
+  const operatorAuth = game.viewForRole(authLevel, 'operator', startedAt)
+  const operatorSecrets = JSON.stringify(operatorAuth.operator.authentication)
+  assert.doesNotMatch(operatorSecrets, /correctId|timestamp|waveform|challenge|certificate|genuine|relay-generated|corrupted/, 'the Operator must not receive authentication answers or specialist evidence')
+  const analystAuth = JSON.stringify(game.viewForRole(authLevel, 'analyst', startedAt).manual)
+  const archivistAuth = JSON.stringify(game.viewForRole(authLevel, 'archivist', startedAt).manual)
+  const engineerAuth = JSON.stringify(game.viewForRole(authLevel, 'engineer', startedAt).manual)
+  assert.match(analystAuth, /Timing & waveform/)
+  assert.doesNotMatch(analystAuth, /None\. We work helpdesk|VALID CHAIN/)
+  assert.match(archivistAuth, /Private challenge response/)
+  assert.doesNotMatch(archivistAuth, /DRIFT|VALID CHAIN/)
+  assert.match(engineerAuth, /Certificate chain/)
+  assert.doesNotMatch(engineerAuth, /None\. We work helpdesk|DRIFT/)
+  const specialistAuth = JSON.stringify(game.viewForRole(authLevel, 'specialist', startedAt).manual)
+  assert.match(specialistAuth, /Timing & waveform/)
+  assert.match(specialistAuth, /Private challenge response/)
+  assert.match(specialistAuth, /Certificate chain/, 'two-player crews must receive every authentication clue domain')
+
+  for (const levelId of [5, 11]) {
+    let mission = game.createGame(700 + levelId, 4, 'en', startedAt, 'standard', 'campaign', levelId)
+    for (let pass = 0; pass < 2 && mission.outcome === 'playing'; pass += 1) {
+      if (!mission.authentication.resolved) mission = game.applyAction(mission, { id: `auth-${levelId}-${pass}`, type: 'authentication-submit', candidateId: game.authenticationSolution(mission) }, startedAt + pass * 10 + 1)
+      if (!mission.router.resolved) {
+        const pair = game.routerSolution(mission)
+        const ids = pair.map(symbol => mission.router.nodes.find(node => node.symbol === symbol).id)
+        mission = game.applyAction(mission, { id: `router-${levelId}-${pass}`, type: 'router-connect', a: ids[0], b: ids[1] }, startedAt + pass * 10 + 2)
+      }
+      if (!mission.translation.resolved) mission = game.applyAction(mission, { id: `translation-${levelId}-${pass}`, type: 'translation-submit', sequence: game.translationSolution(mission) }, startedAt + pass * 10 + 3)
+    }
+    assert.equal(mission.outcome, 'won', `authentication campaign level ${levelId} must have a deterministic solution path`)
+  }
+
   const drifting = game.createGame(7, 4, 'en', startedAt, 'standard', 'fast', 1)
   drifting.modifier = 'router-drift'
   drifting.router.baseFrequency = 44
@@ -122,15 +165,6 @@ try {
   assert.equal(verticalSliceProgress, 5, 'the first four missions must unlock level five without gaps')
   assert.deepEqual(viewedIntermissions, [1, 2, 3, 4])
   assert.deepEqual(unlockedFragments, [4], 'the first act must recover exactly the first directive fragment')
-
-  const legacyScores = 'a.b.c'
-  const legacyPayload = `1|7|${legacyScores}`
-  let legacyHash = 2166136261
-  for (const character of legacyPayload) { legacyHash ^= character.charCodeAt(0); legacyHash = Math.imul(legacyHash, 16777619) }
-  const legacyChecksum = (legacyHash >>> 0).toString(36).toUpperCase().padStart(7, '0')
-  const legacy = campaignSave.decodeCampaignRecovery(`CHD1-7-${legacyScores}-${legacyChecksum}`, game.campaignLevels.length)
-  assert.equal(legacy.progress, 7, 'legacy CHD1 recovery codes must remain importable')
-  assert.deepEqual(legacy.archiveFragments, [4, 6], 'legacy story unlocks must be reconstructed from campaign progress')
 
   console.log('Game regressions passed: deadlines, onboarding, follow-ups, surge grace, accessibility, reconnects, capacity, request paths, and campaign recovery.')
 } finally {

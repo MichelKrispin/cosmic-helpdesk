@@ -52,26 +52,15 @@ export function encodeCampaignRecovery(save: CampaignSave, levelCount: number) {
 export function decodeCampaignRecovery(code: string, levelCount: number): CampaignSave | null {
   const normalized = code.trim().toLowerCase()
   const current = normalized.match(/^chd2-([0-9a-z]+)-([0-9a-z.]+)-([0-9a-z]+)-([0-9a-z]+)-([0-9a-z]+)$/)
-  if (current) {
-    const [, progressRaw, scoresRaw, intermissionsRaw, fragmentsRaw, checksum] = current
-    const progress = Number.parseInt(progressRaw, 36)
-    const scores = normalizeScores(scoresRaw.split('.').map(score => Number.parseInt(score, 36)), levelCount)
-    const completedIntermissions = maskToLevels(intermissionsRaw, levelCount)
-    const archiveFragments = maskToLevels(fragmentsRaw, levelCount)
-    const payload = `2|${progressRaw}|${scoresRaw}|${intermissionsRaw}|${fragmentsRaw}`
-    if (campaignChecksum(payload).toLowerCase() !== checksum || !Number.isInteger(progress) || progress < 1 || progress > levelCount || !scores || !completedIntermissions || !archiveFragments) return null
-    return { progress, scores, completedIntermissions, archiveFragments }
-  }
-
-  const legacy = normalized.match(/^chd1-([0-9a-z]+)-([0-9a-z.]+)-([0-9a-z]+)$/)
-  if (!legacy) return null
-  const [, progressRaw, scoresRaw, checksum] = legacy
+  if (!current) return null
+  const [, progressRaw, scoresRaw, intermissionsRaw, fragmentsRaw, checksum] = current
   const progress = Number.parseInt(progressRaw, 36)
   const scores = normalizeScores(scoresRaw.split('.').map(score => Number.parseInt(score, 36)), levelCount)
-  const payload = `1|${progressRaw}|${scoresRaw}`
-  if (campaignChecksum(payload).toLowerCase() !== checksum || !Number.isInteger(progress) || progress < 1 || progress > levelCount || !scores) return null
-  const completedIntermissions = Array.from({ length: Math.max(0, progress - 1) }, (_, index) => index + 1)
-  return { progress, scores, completedIntermissions, archiveFragments: [4, 6, 9, 12].filter(level => level < progress && level <= levelCount) }
+  const completedIntermissions = maskToLevels(intermissionsRaw, levelCount)
+  const archiveFragments = maskToLevels(fragmentsRaw, levelCount)
+  const payload = `2|${progressRaw}|${scoresRaw}|${intermissionsRaw}|${fragmentsRaw}`
+  if (campaignChecksum(payload).toLowerCase() !== checksum || !Number.isInteger(progress) || progress < 1 || progress > levelCount || !scores || !completedIntermissions || !archiveFragments) return null
+  return { progress, scores, completedIntermissions, archiveFragments }
 }
 
 export function nextCampaignProgress(currentProgress: number, completedLevel: number, levelCount: number) {

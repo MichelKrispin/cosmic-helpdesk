@@ -189,6 +189,13 @@ nav, .app-shell > header { height: 92px; max-width: 1280px; margin: auto; paddin
 .caller-strip span { color: #626b81; font: 8px 'DM Mono'; display: block; }
 .caller-strip strong { color: var(--mint); font-size: 12px; }
 .instruction { color: #858da1; font-size: 12px; line-height: 1.5; min-height: 36px; }
+.auth-candidates { display: grid; gap: 9px; margin-top: 14px; }
+.auth-candidates button { min-height: 71px; padding: 11px 13px; border: 1px solid #3b4559; border-left: 4px solid #566176; background: #090e18; color: var(--paper); text-align: left; cursor: pointer; }
+.auth-candidates button span, .auth-candidates button small { display: block; color: #717b91; font: 8px 'DM Mono'; letter-spacing: .1em; }
+.auth-candidates button strong { display: block; margin: 6px 0; font-size: 12px; }
+.auth-candidates button.selected { border-color: var(--orange); border-left-color: var(--orange); background: #2a1d18; box-shadow: 0 0 16px #ff9b5525; }
+.auth-candidates button.selected small { color: var(--orange); }
+.auth-candidates button:disabled { cursor: not-allowed; }
 .node-map { height: 250px; position: relative; border: 1px solid #2a3345; background: radial-gradient(circle, #1e3740 0, transparent 2px); background-size: 18px 18px; }
 .node-map::before, .node-map::after { content: ''; position: absolute; background: #3e6570; height: 1px; width: 63%; left: 18%; top: 50%; transform: rotate(28deg); }
 .node-map::after { transform: rotate(-28deg); }
