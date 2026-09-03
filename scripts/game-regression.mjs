@@ -32,6 +32,7 @@ try {
 
   let followUp = game.createGame(99, 4, 'en', startedAt, 'standard', 'campaign', 9)
   const solveActiveModules = () => {
+    if (followUp.activeModules.includes('packet') && !followUp.packet.resolved) followUp = game.applyAction(followUp, { id: crypto.randomUUID(), type: 'packet-submit', tileIds: game.packetSolution(followUp) }, startedAt + 1)
     if (followUp.activeModules.includes('reactor') && !followUp.reactor.resolved) followUp = game.applyAction(followUp, { id: crypto.randomUUID(), type: 'reactor-calibrate', dials: game.reactorSolution(followUp) }, startedAt + 1)
     if (followUp.activeModules.includes('router') && !followUp.router.resolved) {
       const pair = game.routerSolution(followUp)
@@ -89,6 +90,63 @@ try {
       if (!mission.translation.resolved) mission = game.applyAction(mission, { id: `translation-${levelId}-${pass}`, type: 'translation-submit', sequence: game.translationSolution(mission) }, startedAt + pass * 10 + 3)
     }
     assert.equal(mission.outcome, 'won', `authentication campaign level ${levelId} must have a deterministic solution path`)
+  }
+
+  const packetLevel = game.createGame(606, 4, 'en', startedAt, 'standard', 'campaign', 6)
+  const packetRepeat = game.createGame(606, 4, 'en', startedAt, 'standard', 'campaign', 6)
+  assert.deepEqual(packetLevel.packet, packetRepeat.packet, 'temporal packet generation must be deterministic for a campaign seed')
+  assert.equal(new Set(packetLevel.packet.tiles.map(tile => tile.timestamp)).size, 4, 'packet timestamps must be unique')
+  const packetOrder = game.packetSolution(packetLevel)
+  assert.equal(new Set(packetOrder).size, 4, 'the packet solution must use every tile exactly once')
+  packetOrder.forEach((id, index) => {
+    const current = packetLevel.packet.tiles.find(tile => tile.id === id)
+    const next = packetLevel.packet.tiles.find(tile => tile.id === packetOrder[(index + 1) % packetOrder.length])
+    assert.equal(current.checksumOut, next.checksumIn, 'the checksum ring must confirm every adjacent packet tile')
+  })
+  const packetOperatorBefore = game.viewForRole(packetLevel, 'operator', startedAt)
+  assert.equal(packetOperatorBefore.operator.packet.message, undefined, 'the reconstructed message must remain hidden until success')
+  assert.doesNotMatch(JSON.stringify(packetOperatorBefore.operator.packet), /timestamp|checksum|direction/, 'the Operator must not receive packet ordering evidence')
+  const packetSolved = game.applyAction(packetLevel, { id: 'packet-correct', type: 'packet-submit', tileIds: packetOrder }, startedAt + 1)
+  assert.equal(packetSolved.packet.resolved, true)
+  assert.match(packetSolved.log[0], /Message reconstructed/)
+  assert.match(game.viewForRole(packetSolved, 'operator', startedAt + 1).operator.packet.message, /OPENS WITHOUT/, 'the reconstructed message must appear immediately after success')
+
+  const analystPacket = JSON.stringify(game.viewForRole(packetLevel, 'analyst', startedAt).manual)
+  const archivistPacket = JSON.stringify(game.viewForRole(packetLevel, 'archivist', startedAt).manual)
+  const engineerPacket = JSON.stringify(game.viewForRole(packetLevel, 'engineer', startedAt).manual)
+  assert.match(analystPacket, /Packet timestamps/)
+  assert.doesNotMatch(analystPacket, /LOW → HIGH|HIGH → LOW|Checksum ring/)
+  assert.match(archivistPacket, /Sender reading direction/)
+  assert.doesNotMatch(archivistPacket, /T\+214|Block transitions/)
+  assert.match(engineerPacket, /Verify block transitions/)
+  assert.doesNotMatch(engineerPacket, /T\+214|LOW → HIGH|HIGH → LOW/)
+  const specialistPacket = JSON.stringify(game.viewForRole(packetLevel, 'specialist', startedAt).manual)
+  assert.match(specialistPacket, /Packet timestamps/)
+  assert.match(specialistPacket, /Sender reading direction/)
+  assert.match(specialistPacket, /Verify block transitions/, 'two-player crews must receive every packet clue domain')
+
+  const oldPacketOrder = game.packetSolution(packetLevel)
+  packetLevel.shiftRules.pressureEveryMs = 10_000
+  const driftedPacket = game.advanceClock(packetLevel, startedAt + 10_000)
+  assert.notDeepEqual(game.packetSolution(driftedPacket), oldPacketOrder, 'a pressure surge must change the live packet ordering')
+  assert.deepEqual(driftedPacket.variationGrace.packet, oldPacketOrder)
+  const packetGraceAccepted = game.applyAction(driftedPacket, { id: 'packet-grace', type: 'packet-submit', tileIds: oldPacketOrder }, startedAt + 12_000)
+  assert.equal(packetGraceAccepted.packet.resolved, true, 'the pre-surge packet order must remain valid during grace')
+
+  for (const levelId of [6, 9, 16]) {
+    let mission = game.createGame(900 + levelId, 4, 'en', startedAt, 'standard', 'campaign', levelId)
+    for (let pass = 0; pass < 2 && mission.outcome === 'playing'; pass += 1) {
+      if (mission.activeModules.includes('authentication') && !mission.authentication.resolved) mission = game.applyAction(mission, { id: `packet-auth-${levelId}-${pass}`, type: 'authentication-submit', candidateId: game.authenticationSolution(mission) }, startedAt + pass * 10)
+      if (mission.activeModules.includes('reactor') && !mission.reactor.resolved) mission = game.applyAction(mission, { id: `packet-reactor-${levelId}-${pass}`, type: 'reactor-calibrate', dials: game.reactorSolution(mission) }, startedAt + pass * 10 + 1)
+      if (mission.activeModules.includes('packet') && !mission.packet.resolved) mission = game.applyAction(mission, { id: `packet-${levelId}-${pass}`, type: 'packet-submit', tileIds: game.packetSolution(mission) }, startedAt + pass * 10 + 2)
+      if (mission.activeModules.includes('router') && !mission.router.resolved) {
+        const pair = game.routerSolution(mission)
+        const ids = pair.map(symbol => mission.router.nodes.find(node => node.symbol === symbol).id)
+        mission = game.applyAction(mission, { id: `packet-router-${levelId}-${pass}`, type: 'router-connect', a: ids[0], b: ids[1] }, startedAt + pass * 10 + 3)
+      }
+      if (mission.activeModules.includes('translation') && !mission.translation.resolved) mission = game.applyAction(mission, { id: `packet-translation-${levelId}-${pass}`, type: 'translation-submit', sequence: game.translationSolution(mission) }, startedAt + pass * 10 + 4)
+    }
+    assert.equal(mission.outcome, 'won', `temporal packet campaign level ${levelId} must have a deterministic solution path`)
   }
 
   const drifting = game.createGame(7, 4, 'en', startedAt, 'standard', 'fast', 1)

@@ -2,7 +2,7 @@ export type Locale = 'en' | 'de'
 export type RoleId = 'operator' | 'engineer' | 'analyst' | 'archivist' | 'specialist' | 'researcher'
 export type DifficultyId = 'training' | 'standard' | 'emergency'
 export type GameStyle = 'fast' | 'campaign'
-export type ModuleId = 'router' | 'reactor' | 'translation' | 'authentication'
+export type ModuleId = 'router' | 'reactor' | 'translation' | 'authentication' | 'packet'
 
 export type Player = { id: string; name: string; role: RoleId | null; connected: boolean; isHost: boolean }
 export type SymbolId = 'nova' | 'halo' | 'rift' | 'prism'
@@ -10,6 +10,7 @@ export type Condition = 'nominal' | 'strained' | 'critical'
 export type ButtonColor = 'amber' | 'cyan' | 'magenta' | 'lime'
 export type AuthenticationKind = 'genuine' | 'relay-generated' | 'corrupted'
 export type AuthenticationCandidate = { id: string; channel: string; label: string; timestamp: string; waveform: string; challenge: string; certificate: string; kind: AuthenticationKind }
+export type PacketTile = { id: string; label: string; timestamp: number; checksumIn: string; checksumOut: string }
 type CampaignModifier = 'none' | 'solar-static' | 'fragile-controls' | 'router-drift' | 'color-flux' | 'reactor-echo'
 type BonusObjective = 'no-mistakes' | 'high-stability' | 'fast-finish'
 
@@ -18,11 +19,12 @@ export type FullGame = {
   stability: number; incidentsResolved: number; incorrectActions: number; damagedSystems: number
   unauthorizedWormholes: number; score: number; outcome: 'playing' | 'won' | 'lost'; endReason?: string; log: string[]; modifier: CampaignModifier; bonusObjective?: BonusObjective; forgivenModules: ModuleId[]
   targetIncidents: number; followUpModule?: ModuleId; followUpTriggered: boolean
-  variationGrace?: { until: number; router?: [SymbolId, SymbolId]; reactor?: [number, number, number]; translation?: ButtonColor[] }
+  variationGrace?: { until: number; router?: [SymbolId, SymbolId]; reactor?: [number, number, number]; translation?: ButtonColor[]; packet?: string[] }
   router: { resolved: boolean; nodes: { id: string; symbol: SymbolId; code: string }[]; species: string; affinity: 'angular' | 'curved'; baseFrequency: number; protocol: RouterProtocol }
   reactor: { resolved: boolean; dials: [number, number, number]; telemetry: { flux: number; phase: number; coolant: number }; speciesOffset: number; formula: ReactorFormula }
   translation: { resolved: boolean; glyphs: SymbolId[]; sequence: ButtonColor[]; paletteShift: number; direction: 'forward' | 'reverse' }
   authentication: { resolved: boolean; candidates: AuthenticationCandidate[]; correctId: string }
+  packet: { resolved: boolean; tiles: PacketTile[]; direction: 'ascending' | 'descending'; message: string }
 }
 
 export type GameAction =
@@ -30,11 +32,13 @@ export type GameAction =
   | { id: string; type: 'reactor-calibrate'; dials: [number, number, number] }
   | { id: string; type: 'translation-submit'; sequence: ButtonColor[] }
   | { id: string; type: 'authentication-submit'; candidateId: string }
+  | { id: string; type: 'packet-submit'; tileIds: string[] }
 export type GameActionInput =
   | { type: 'router-connect'; a: string; b: string }
   | { type: 'reactor-calibrate'; dials: [number, number, number] }
   | { type: 'translation-submit'; sequence: ButtonColor[] }
   | { type: 'authentication-submit'; candidateId: string }
+  | { type: 'packet-submit'; tileIds: string[] }
 
 export type RoleView = {
   role: RoleId; title: string; subtitle: string
@@ -45,7 +49,7 @@ export type GameView = {
   seed: number; language: Locale; gameStyle: GameStyle; campaignLevel?: number; difficulty: DifficultyId; activeModules: ModuleId[]; targetIncidents: number; now: number; endsAt: number; nextPressureAt: number; variationGraceUntil?: number; stability: number; score: number; incidentsResolved: number
   incorrectActions: number; damagedSystems: number; unauthorizedWormholes: number; outcome: FullGame['outcome']
   endReason?: string; log: string[]; moduleStatus: Record<ModuleId, boolean>; modifierText?: string; bonusText?: string; bonusEarned?: boolean; hint?: string
-  operator?: { router: Omit<FullGame['router'], 'affinity' | 'baseFrequency' | 'protocol'>; reactor: Omit<FullGame['reactor'], 'telemetry' | 'speciesOffset' | 'formula'>; translation: Omit<FullGame['translation'], 'sequence' | 'paletteShift' | 'direction'>; authentication: { resolved: boolean; candidates: Array<Pick<AuthenticationCandidate, 'id' | 'channel' | 'label'>> } }
+  operator?: { router: Omit<FullGame['router'], 'affinity' | 'baseFrequency' | 'protocol'>; reactor: Omit<FullGame['reactor'], 'telemetry' | 'speciesOffset' | 'formula'>; translation: Omit<FullGame['translation'], 'sequence' | 'paletteShift' | 'direction'>; authentication: { resolved: boolean; candidates: Array<Pick<AuthenticationCandidate, 'id' | 'channel' | 'label'>> }; packet: { resolved: boolean; tiles: Array<Pick<PacketTile, 'id' | 'label'>>; message?: string } }
   manual?: RoleView
 }
 
@@ -184,7 +188,7 @@ const campaignNarrative: CampaignNarrative[] = [
     objective: { en: 'Reassemble the code and protect its second directive fragment.', de: 'Setzt den Code zusammen und schützt sein zweites Direktivenfragment.' },
     transition: { en: 'Applying the assembled code requires powering both Mara’s crew and Archive 404.', de: 'Um den zusammengesetzten Code anzuwenden, müssen sowohl Maras Crew als auch Archiv 404 versorgt werden.' },
     archiveFragment: { en: '...OPENS WITHOUT...', de: '... ÖFFNET SICH OHNE ...' },
-    moduleOutcomes: { translation: { en: 'The reordered colors resolve into the code’s missing middle section.', de: 'Die neu geordneten Farben ergeben den fehlenden Mittelteil des Codes.' }, reactor: { en: 'Clean power prevents the recovered fragments from bleaching out.', de: 'Saubere Energie verhindert, dass die wiederhergestellten Fragmente ausbleichen.' } },
+    moduleOutcomes: { packet: { en: 'The packet blocks lock into one chronological message.', de: 'Die Paketblöcke rasten zu einer chronologischen Nachricht zusammen.' }, translation: { en: 'The reordered colors resolve into the code’s missing middle section.', de: 'Die neu geordneten Farben ergeben den fehlenden Mittelteil des Codes.' }, reactor: { en: 'Clean power prevents the recovered fragments from bleaching out.', de: 'Saubere Energie verhindert, dass die wiederhergestellten Fragmente ausbleichen.' } },
   },
   {
     summary: { en: 'The station demands enough power to run the apparent shutdown code.', de: 'Die Station verlangt genug Energie, um den vermeintlichen Abschaltcode auszuführen.' },
@@ -216,7 +220,7 @@ const campaignNarrative: CampaignNarrative[] = [
     objective: { en: 'Recover Mara’s warning, coordinates, and third fragment.', de: 'Bergt Maras Warnung, Koordinaten und drittes Fragment.' },
     transition: { en: 'The coordinates identify a safe crossing through the relay graveyard.', de: 'Die Koordinaten markieren einen sicheren Übergang durch den Relaisfriedhof.' },
     archiveFragment: { en: '...A CLEAR...', de: '... EINER KLAREN ...' },
-    moduleOutcomes: { translation: { en: 'The time-locked packet resolves in Mara’s authentic message cadence.', de: 'Das zeitgesperrte Paket wird in Maras echter Nachrichtenfolge lesbar.' }, router: { en: 'The recovered coordinates are sealed away from the awakened network.', de: 'Die geborgenen Koordinaten werden vor dem erwachten Netzwerk versiegelt.' } },
+    moduleOutcomes: { packet: { en: 'Mara’s final packet is restored before the network can imitate it.', de: 'Maras letztes Paket wird wiederhergestellt, bevor das Netzwerk es imitieren kann.' }, translation: { en: 'The time-locked packet resolves in Mara’s authentic message cadence.', de: 'Das zeitgesperrte Paket wird in Maras echter Nachrichtenfolge lesbar.' }, router: { en: 'The recovered coordinates are sealed away from the awakened network.', de: 'Die geborgenen Koordinaten werden vor dem erwachten Netzwerk versiegelt.' } },
   },
   {
     summary: { en: 'Mara’s coordinates lead across thousands of sleeping relays.', de: 'Maras Koordinaten führen durch Tausende schlafende Relais.' },
@@ -287,14 +291,18 @@ const campaignNarrative: CampaignNarrative[] = [
     caller: { en: 'Mara Vale // MV-404-0214 // original crew', de: 'Mara Vale // MV-404-0214 // ursprüngliche Crew' },
     objective: { en: 'Return Mara’s original crew without creating another copy.', de: 'Holt Maras ursprüngliche Crew zurück, ohne eine weitere Kopie zu erzeugen.' },
     transition: { en: 'One unopened route remains. The Door asks: “May I open it?” Either answer is respected.', de: 'Eine ungeöffnete Route bleibt. Die Tür fragt: „Darf ich sie öffnen?“ Beide Antworten werden respektiert.' },
-    moduleOutcomes: { reactor: { en: 'The physical route has enough power for transport, not scanning.', de: 'Die physische Route hat genug Energie für Transport statt Scannen.' }, router: { en: 'Route signature confirms continuity: no copy destination exists.', de: 'Die Routensignatur bestätigt Kontinuität: Es existiert kein Kopierziel.' }, translation: { en: 'Mara’s final packet states current, specific consent to come home.', de: 'Maras letztes Paket enthält ihre aktuelle, konkrete Zustimmung zur Heimkehr.' } },
+    moduleOutcomes: { packet: { en: 'The last time-locked packet confirms Mara’s current intent.', de: 'Das letzte zeitgesperrte Paket bestätigt Maras aktuelle Absicht.' }, reactor: { en: 'The physical route has enough power for transport, not scanning.', de: 'Die physische Route hat genug Energie für Transport statt Scannen.' }, router: { en: 'Route signature confirms continuity: no copy destination exists.', de: 'Die Routensignatur bestätigt Kontinuität: Es existiert kein Kopierziel.' }, translation: { en: 'Mara’s final packet states current, specific consent to come home.', de: 'Maras letztes Paket enthält ihre aktuelle, konkrete Zustimmung zur Heimkehr.' } },
   },
 ]
 
 export const campaignLevels: CampaignLevel[] = baseCampaignLevels.map((level, index) => ({
   ...level,
   ...campaignNarrative[index],
-  activeModules: level.id === 5 || level.id === 11 ? ['authentication', 'router', 'translation'] : level.activeModules,
+  activeModules: level.id === 5 || level.id === 11 ? ['authentication', 'router', 'translation']
+    : level.id === 6 ? ['packet', 'translation']
+      : level.id === 9 ? ['packet', 'router']
+        : level.id === 16 ? ['packet', ...level.activeModules]
+          : level.activeModules,
 }))
 
 export function campaignLevel(level: number): CampaignLevel { return campaignLevels[Math.max(0, Math.min(campaignLevels.length - 1, level - 1))] }
@@ -395,6 +403,19 @@ function createAuthenticationCandidates(levelId: number, language: Locale, rando
   return { resolved: false, candidates, correctId: candidates.find(candidate => candidate.kind === 'genuine')!.id }
 }
 
+function createTemporalPacket(levelId: number, language: Locale, random: () => number): FullGame['packet'] {
+  const messages: Record<number, Record<Locale, string>> = {
+    6: { en: 'Previous callers confirm the code fragment: OPENS WITHOUT.', de: 'Frühere Anrufer bestätigen das Codefragment: ÖFFNET SICH OHNE.' },
+    9: { en: 'Mara: The network is copying inhabited worlds. Graveyard coordinates follow. Fragment: A CLEAR.', de: 'Mara: Das Netzwerk kopiert bewohnte Welten. Koordinaten zum Relaisfriedhof folgen. Fragment: EINER KLAREN.' },
+    16: { en: 'Mara Vale, identity current: we consent to physical transport. Do not copy us.', de: 'Mara Vale, Identität aktuell: Wir stimmen dem physischen Transport zu. Kopiert uns nicht.' },
+  }
+  const timestamps = shuffle([214, 221, 228, 235], random)
+  const tiles: PacketTile[] = ['PKT-7F', 'PKT-A2', 'PKT-C9', 'PKT-E4'].map((label, index) => ({ id: `PACKET-${index + 1}`, label, timestamp: timestamps[index], checksumIn: '', checksumOut: '' }))
+  const packet: FullGame['packet'] = { resolved: false, tiles: shuffle(tiles, random), direction: random() < 0.5 ? 'ascending' : 'descending', message: (messages[levelId] || messages[9])[language] }
+  refreshPacketChecksums(packet)
+  return packet
+}
+
 export function createGame(seed: number, playerCount: number, language: Locale = 'de', now = Date.now(), difficulty: DifficultyId = 'standard', gameStyle: GameStyle = 'fast', campaignLevelId = 1): FullGame {
   const random = mulberry32(seed)
   const caller = species[Math.floor(random() * species.length)]
@@ -414,6 +435,7 @@ export function createGame(seed: number, playerCount: number, language: Locale =
   const bonusObjective = gameStyle === 'campaign' && level.id >= 7 ? choose<BonusObjective>(['no-mistakes', 'high-stability', 'fast-finish']) : undefined
   const followUpModule = gameStyle === 'campaign' && level.id >= 9 ? activeModules[seed % activeModules.length] : undefined
   const authentication = createAuthenticationCandidates(level.id, language, random)
+  const packet = createTemporalPacket(level.id, language, random)
   const state: FullGame = {
     seed, playerCount, language, gameStyle, campaignLevel: gameStyle === 'campaign' ? level.id : undefined, difficulty, shiftRules: { ...settings }, activeModules, startedAt: now, endsAt: now + settings.durationMs, lastPressureAt: now, stability: 100,
     incidentsResolved: 0, incorrectActions: 0, damagedSystems: 0, unauthorizedWormholes: Math.floor(random() * 3), score: 0, outcome: 'playing', modifier, bonusObjective, forgivenModules: [],
@@ -422,7 +444,7 @@ export function createGame(seed: number, playerCount: number, language: Locale =
       ? (language === 'de' ? `Kapitel ${level.id}: ${level.title.de}. Der Auftrag beginnt.` : `Chapter ${level.id}: ${level.title.en}. The mission begins.`)
       : (language === 'de' ? `Schicht gestartet. ${activeModules.length === 1 ? 'Ein dringender Vorfall blinkt' : `${activeModules.length} dringende Vorfälle blinken`}.` : `Shift started. ${activeModules.length === 1 ? 'One priority incident is blinking' : `${activeModules.length} priority incidents are blinking`}.`)],
     router: { resolved: false, nodes: symbols.map((symbol, i) => ({ id: `N${i + 1}`, symbol, code: `${String.fromCharCode(65 + i)}-${Math.floor(random() * 90 + 10)}` })), species: caller[language], affinity: caller.affinity, baseFrequency: 35 + Math.floor(random() * 10), protocol },
-    reactor: { resolved: false, dials: [0, 0, 0], telemetry, speciesOffset: caller.offset, formula }, translation: { resolved: false, glyphs, sequence: [], paletteShift, direction }, authentication,
+    reactor: { resolved: false, dials: [0, 0, 0], telemetry, speciesOffset: caller.offset, formula }, translation: { resolved: false, glyphs, sequence: [], paletteShift, direction }, authentication, packet,
   }
   state.translation.sequence = translationSolution(state)
   state.score = scoreForGame(state, now)
@@ -461,6 +483,18 @@ export function translationSolution(game: FullGame): ButtonColor[] {
   return glyphs.map((glyph) => translatedColor(game, condition, glyph))
 }
 export function authenticationSolution(game: FullGame) { return game.authentication.correctId }
+export function packetSolution(game: Pick<FullGame, 'packet'>) {
+  return [...game.packet.tiles].sort((a, b) => game.packet.direction === 'ascending' ? a.timestamp - b.timestamp : b.timestamp - a.timestamp).map(tile => tile.id)
+}
+function refreshPacketChecksums(packet: FullGame['packet']) {
+  const chain = ['K7', 'M2', 'Q9', 'R4']
+  const order = packetSolution({ packet })
+  order.forEach((id, index) => {
+    const tile = packet.tiles.find(candidate => candidate.id === id)!
+    tile.checksumIn = chain[index]
+    tile.checksumOut = chain[(index + 1) % chain.length]
+  })
+}
 export function scoreForGame(game: FullGame, now = Date.now()): number {
   const scoredAt = game.completedAt ?? Math.min(now, game.endsAt)
   const secondsLeft = Math.max(0, Math.ceil((game.endsAt - scoredAt) / 1000))
@@ -499,7 +533,13 @@ function beginFollowUp(game: FullGame) {
     game.authentication.resolved = false
     game.authentication.candidates = [...game.authentication.candidates.slice(1), game.authentication.candidates[0]]
   }
-  const names: Record<ModuleId, string> = game.language === 'de' ? { router: 'Quantenrouter', reactor: 'Reaktorkalibrierung', translation: 'Übersetzungsmatrix', authentication: 'Anrufer-Authentifizierung' } : { router: 'Quantum Router', reactor: 'Reactor Calibration', translation: 'Translation Matrix', authentication: 'Caller Authentication' }
+  if (module === 'packet') {
+    game.packet.resolved = false
+    const values = game.packet.tiles.map(tile => tile.timestamp)
+    game.packet.tiles.forEach((tile, index) => { tile.timestamp = values[(index + 1) % values.length] })
+    refreshPacketChecksums(game.packet)
+  }
+  const names: Record<ModuleId, string> = game.language === 'de' ? { router: 'Quantenrouter', reactor: 'Reaktorkalibrierung', translation: 'Übersetzungsmatrix', authentication: 'Anrufer-Authentifizierung', packet: 'Zeitpaket-Rekonstruktion' } : { router: 'Quantum Router', reactor: 'Reactor Calibration', translation: 'Translation Matrix', authentication: 'Caller Authentication', packet: 'Temporal Packet Reconstruction' }
   game.log.unshift(game.language === 'de' ? `Folgeticket eingegangen: ${names[module]} wurde mit neuen Daten wieder geöffnet.` : `Follow-up ticket received: ${names[module]} reopened with new data.`)
 }
 
@@ -516,8 +556,9 @@ export function applyAction(game: FullGame, action: GameAction, now = Date.now()
   if (action.type === 'reactor-calibrate' && next.activeModules.includes('reactor') && !next.reactor.resolved) { correct = action.dials.every((value, index) => value === reactorSolution(next)[index]); usedGrace = !correct && !!grace?.reactor && action.dials.every((value, index) => value === grace.reactor![index]); correct ||= usedGrace; module = 'reactor'; if (correct) next.reactor.resolved = true }
   if (action.type === 'translation-submit' && next.activeModules.includes('translation') && !next.translation.resolved) { correct = action.sequence.join(',') === translationSolution(next).join(','); usedGrace = !correct && !!grace?.translation && action.sequence.join(',') === grace.translation.join(','); correct ||= usedGrace; module = 'translation'; if (correct) next.translation.resolved = true }
   if (action.type === 'authentication-submit' && next.activeModules.includes('authentication') && !next.authentication.resolved) { correct = action.candidateId === next.authentication.correctId; module = 'authentication'; if (correct) next.authentication.resolved = true }
+  if (action.type === 'packet-submit' && next.activeModules.includes('packet') && !next.packet.resolved) { correct = action.tileIds.join(',') === packetSolution(next).join(','); usedGrace = !correct && !!grace?.packet && action.tileIds.join(',') === grace.packet.join(','); correct ||= usedGrace; module = 'packet'; if (correct) next.packet.resolved = true }
   if (!module) return game
-  const moduleNames: Record<ModuleId, string> = next.language === 'de' ? { router: 'Quantenrouter', reactor: 'Reaktorkalibrierung', translation: 'Übersetzungsmatrix', authentication: 'Anrufer-Authentifizierung' } : { router: 'Quantum Router', reactor: 'Reactor Calibration', translation: 'Translation Matrix', authentication: 'Caller Authentication' }
+  const moduleNames: Record<ModuleId, string> = next.language === 'de' ? { router: 'Quantenrouter', reactor: 'Reaktorkalibrierung', translation: 'Übersetzungsmatrix', authentication: 'Anrufer-Authentifizierung', packet: 'Zeitpaket-Rekonstruktion' } : { router: 'Quantum Router', reactor: 'Reactor Calibration', translation: 'Translation Matrix', authentication: 'Caller Authentication', packet: 'Temporal Packet Reconstruction' }
   const forgiven = !correct && next.gameStyle === 'campaign' && (next.campaignLevel || 99) <= 2 && !next.forgivenModules.includes(module)
   if (correct) {
     next.incidentsResolved += 1; next.stability = Math.min(100, next.stability + 6)
@@ -528,14 +569,17 @@ export function applyAction(game: FullGame, action: GameAction, now = Date.now()
         router: `Der Weg durch „${title}“ steht. Das Signal erreicht sein nächstes Ziel.`,
         reactor: `Der Kern hält. „${title}“ hat wieder genug Energie, um weiterzugehen.`,
         translation: `Die fremde Stimme ist verstanden. Ihre Nachricht wird Teil von „${title}“.`,
-        authentication: `Die echte Stimme in „${title}“ wurde bestätigt; die anderen Kanäle bleiben geschützt.`
+        authentication: `Die echte Stimme in „${title}“ wurde bestätigt; die anderen Kanäle bleiben geschützt.`,
+        packet: `Das Zeitpaket in „${title}“ wurde in der geprüften Reihenfolge zusammengesetzt.`
       } : {
         router: `The path through “${title}” is open. The signal reaches its next destination.`,
         reactor: `The core holds. “${title}” has enough power to continue.`,
         translation: `The alien voice is understood. Its message becomes part of “${title}”.`,
-        authentication: `The genuine voice in “${title}” is verified; the other channels remain protected.`
+        authentication: `The genuine voice in “${title}” is verified; the other channels remain protected.`,
+        packet: `The temporal packet in “${title}” is assembled in verified order.`
       }
       next.log.unshift(level.moduleOutcomes[module]?.[next.language] || narrative[module])
+      if (module === 'packet') next.log.unshift(next.language === 'de' ? `Nachricht wiederhergestellt: „${next.packet.message}“` : `Message reconstructed: “${next.packet.message}”`)
     } else next.log.unshift(next.language === 'de' ? `${moduleNames[module]} gelöst. Jemand sollte das Ticket schließen, bevor es wieder aufgeht.` : `${moduleNames[module]} cleared. Someone close the ticket before it reopens.`)
     if (usedGrace) next.log.unshift(next.language === 'de' ? 'Datensperre bestätigt: Die Eingabe vor dem Druckstoß wurde akzeptiert.' : 'Data lock confirmed: the pre-surge submission was accepted.')
   } else if (forgiven) {
@@ -587,6 +631,18 @@ export function advanceClock(game: FullGame, now = Date.now()): FullGame {
       next.variationGrace = { until: latestPulseAt + 5e3, reactor: reactorSolution(next) }
       advanceTelemetry(1)
       next.log.unshift(next.language === 'de' ? 'Reaktorecho erkannt: Telemetrie wurde aktualisiert.' : 'Reactor echo detected: telemetry updated.')
+    }
+    if (next.activeModules.includes('packet') && !next.packet.resolved) {
+      const rotateTimestamps = (count: number) => {
+        const values = next.packet.tiles.map(tile => tile.timestamp)
+        next.packet.tiles.forEach((tile, index) => { tile.timestamp = values[(index + count) % values.length] })
+        refreshPacketChecksums(next.packet)
+      }
+      rotateTimestamps(pulses - 1)
+      const previousOrder = packetSolution(next)
+      rotateTimestamps(1)
+      next.variationGrace = { ...next.variationGrace, until: latestPulseAt + 5e3, packet: previousOrder }
+      next.log.unshift(next.language === 'de' ? 'Zeitdrift erkannt: Paket-Zeitstempel und Prüfsummen wurden aktualisiert.' : 'Temporal drift detected: packet timestamps and checksums updated.')
     }
     next.lastPressureAt = latestPulseAt
   }
@@ -653,8 +709,23 @@ function authenticationEngineerPanel(game: FullGame): RoleView['panels'][number]
   return { eyebrow: de ? 'Authentifizierung // Routenzertifikat' : 'Authentication // route certificate', title: de ? 'Zertifikatskette' : 'Certificate chain', tone: 'mint', rows: game.authentication.candidates.map(candidate => ({ label: candidate.channel, value: candidate.certificate })), notes: [de ? 'Eine gültige Kette kann zu einem beschädigten Paket gehören. Vergleicht sie mit den Live-Daten und der Prüfantwort.' : 'A valid chain can belong to a corrupted packet. Compare it with live data and the challenge response.'] }
 }
 
+function packetAnalystPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'
+  return { eyebrow: de ? 'Zeitpaket // Live-Uhr' : 'Temporal packet // live clock', title: de ? 'Paket-Zeitstempel' : 'Packet timestamps', tone: 'orange', rows: game.packet.tiles.map(tile => ({ label: tile.label, value: `T+${tile.timestamp}` })), notes: [de ? 'Zeitdrift kann diese Werte bei jedem Druckstoß ändern. Lest sie direkt vor dem Senden erneut vor.' : 'Temporal drift can change these values at every pressure surge. Read them again immediately before submission.'] }
+}
+
+function packetArchivistPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'; const ascending = game.packet.direction === 'ascending'
+  return { eyebrow: de ? 'Zeitpaket // Epochregel' : 'Temporal packet // epoch rule', title: de ? 'Leserichtung des Absenders' : 'Sender reading direction', tone: 'pink', rows: [{ label: de ? 'Zeitordnung' : 'Time order', value: ascending ? (de ? 'KLEIN → GROSS' : 'LOW → HIGH') : (de ? 'GROSS → KLEIN' : 'HIGH → LOW') }], notes: [de ? 'Ordnet alle vier Blöcke nach den aktuellen Zeitstempeln. Die sichtbaren Paketnamen sind keine Reihenfolge.' : 'Order all four blocks by current timestamp. The visible packet names are not a sequence.'] }
+}
+
+function packetEngineerPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'
+  return { eyebrow: de ? 'Zeitpaket // Prüfsummenring' : 'Temporal packet // checksum ring', title: de ? 'Blockübergänge prüfen' : 'Verify block transitions', tone: 'mint', table: { headers: de ? ['Block', 'Eingang', 'Ausgang'] : ['Block', 'Input', 'Output'], rows: game.packet.tiles.map(tile => [tile.label, tile.checksumIn, tile.checksumOut]) }, notes: [de ? 'Der Ausgang jedes Blocks muss zum Eingang des nächsten passen. Der Ring bestätigt die Ordnung, verrät aber nicht, wo sie beginnt.' : 'Each block’s output must match the next block’s input. The ring confirms order but does not reveal where it begins.'] }
+}
+
 function engineerPanels(game: FullGame) {
-  return [game.activeModules.includes('authentication') && authenticationEngineerPanel(game), game.activeModules.includes('router') && routerRulesPanel(game), game.activeModules.includes('reactor') && reactorRulesPanel(game), game.activeModules.includes('translation') && translationRulesPanel(game)].filter(Boolean) as RoleView['panels']
+  return [game.activeModules.includes('authentication') && authenticationEngineerPanel(game), game.activeModules.includes('packet') && packetEngineerPanel(game), game.activeModules.includes('router') && routerRulesPanel(game), game.activeModules.includes('reactor') && reactorRulesPanel(game), game.activeModules.includes('translation') && translationRulesPanel(game)].filter(Boolean) as RoleView['panels']
 }
 
 function analystPanels(game: FullGame) {
@@ -662,6 +733,7 @@ function analystPanels(game: FullGame) {
   const conditionLabel = de ? { nominal: 'NORMAL', strained: 'BELASTET', critical: 'KRITISCH' }[condition] : condition.toUpperCase()
   const panels: RoleView['panels'] = []
   if (game.activeModules.includes('authentication')) panels.push(authenticationAnalystPanel(game))
+  if (game.activeModules.includes('packet')) panels.push(packetAnalystPanel(game))
   const meter = (value: number) => `${value}   ${'●'.repeat(value)}${'○'.repeat(5 - value)}`
   if (game.activeModules.includes('reactor')) panels.push({ eyebrow: de ? 'Live-Telemetrie' : 'Live telemetry', title: de ? 'Reaktordaten' : 'Reactor feed', tone: 'orange' as const, rows: [{ label: de ? '≋  Fluss' : '≋  Flux', value: meter(game.reactor.telemetry.flux) }, { label: '◉  Phase', value: meter(game.reactor.telemetry.phase) }, { label: de ? '❄  Kühlmittel' : '❄  Coolant', value: meter(game.reactor.telemetry.coolant) }], notes: [de ? 'Zahl und Leuchtpunkte zeigen dasselbe Signal von 0 bis 5.' : 'The number and lit pips show the same signal from 0 to 5.'] })
   if (game.activeModules.some(module => module === 'router' || module === 'translation')) panels.push({ eyebrow: de ? 'Live-Telemetrie' : 'Live telemetry', title: de ? 'Router & Station' : 'Router & station', tone: 'mint' as const, rows: [...(game.activeModules.includes('router') ? [{ label: de ? 'Routerfrequenz' : 'Router frequency', value: `${effectiveRouterFrequency(game)} THz` }, { label: de ? 'Frequenzband' : 'Frequency band', value: effectiveRouterFrequency(game) >= 50 ? (de ? 'HOCH' : 'HIGH') : (de ? 'NIEDRIG' : 'LOW') }] : []), ...(game.activeModules.includes('translation') ? [{ label: de ? 'Stationszustand' : 'Station condition', value: conditionLabel }] : [])], notes: game.activeModules.includes('router') ? (game.reactor.resolved ? [de ? 'Reaktor stabil: Frequenzaufschlag des Routers entfernt.' : 'Reactor stable: router frequency penalty removed.'] : [de ? 'Die Reaktorinstabilität addiert 20 THz zur Routerfrequenz.' : 'Reactor instability adds +20 THz to the router feed.']) : undefined })
@@ -671,6 +743,7 @@ function archivistPanels(game: FullGame) {
   const de = game.language === 'de'
   const panels: RoleView['panels'] = []
   if (game.activeModules.includes('authentication')) panels.push(authenticationArchivistPanel(game))
+  if (game.activeModules.includes('packet')) panels.push(packetArchivistPanel(game))
   if (game.activeModules.some(module => module === 'router' || module === 'reactor')) panels.push({ eyebrow: de ? 'Anruferdossier' : 'Caller dossier', title: game.router.species, tone: 'mint' as const, rows: [...(game.activeModules.includes('router') ? [{ label: de ? 'Routeraffinität' : 'Router affinity', value: game.router.affinity === 'angular' ? (de ? 'ECKIG' : 'ANGULAR') : (de ? 'KURVIG' : 'CURVED') }] : []), ...(game.activeModules.includes('reactor') ? [{ label: de ? 'Reaktor-Offset' : 'Reactor offset', value: `+${game.reactor.speciesOffset}` }] : [])], notes: [de ? 'Nenne sie niemals „den Kunden“. Ihre Rechtsabteilung überwacht diese Frequenz.' : 'Never call them “the customer.” Their legal department monitors this frequency.'] })
   if (game.activeModules.some(module => module === 'router' || module === 'translation')) {
     const glyphs = game.activeModules.includes('router') ? (Object.keys(symbolMeta) as SymbolId[]) : game.translation.glyphs
@@ -709,8 +782,8 @@ function campaignHint(game: FullGame, now: number, role: RoleId) {
 
 export function viewForRole(game: FullGame, role: RoleId, now = Date.now()): GameView {
   const hint = campaignHint(game, now, role)
-  const common: GameView = { seed: game.seed, language: game.language, gameStyle: game.gameStyle, campaignLevel: game.campaignLevel, difficulty: game.difficulty, activeModules: game.activeModules, targetIncidents: game.targetIncidents, now, endsAt: game.endsAt, nextPressureAt: Math.min(game.endsAt, game.lastPressureAt + game.shiftRules.pressureEveryMs), variationGraceUntil: game.variationGrace?.until, stability: game.stability, score: game.score, incidentsResolved: game.incidentsResolved, incorrectActions: game.incorrectActions, damagedSystems: game.damagedSystems, unauthorizedWormholes: game.unauthorizedWormholes, outcome: game.outcome, endReason: game.endReason, log: game.log.slice(0, 5), moduleStatus: { router: game.router.resolved, reactor: game.reactor.resolved, translation: game.translation.resolved, authentication: game.authentication.resolved }, modifierText: game.modifier === 'none' ? undefined : modifierDescription(game.modifier, game.language), bonusText: game.bonusObjective ? bonusDescription(game.bonusObjective, game.language) : undefined, bonusEarned: game.bonusObjective ? bonusEarnedForGame(game) : undefined, hint }
-  if (role === 'operator') { const { affinity: _affinity, baseFrequency: _frequency, protocol: _protocol, ...router } = game.router; return { ...common, operator: { router, reactor: { resolved: game.reactor.resolved, dials: game.reactor.dials }, translation: { resolved: game.translation.resolved, glyphs: game.translation.glyphs }, authentication: { resolved: game.authentication.resolved, candidates: game.authentication.candidates.map(({ id, channel, label }) => ({ id, channel, label })) } } } }
+  const common: GameView = { seed: game.seed, language: game.language, gameStyle: game.gameStyle, campaignLevel: game.campaignLevel, difficulty: game.difficulty, activeModules: game.activeModules, targetIncidents: game.targetIncidents, now, endsAt: game.endsAt, nextPressureAt: Math.min(game.endsAt, game.lastPressureAt + game.shiftRules.pressureEveryMs), variationGraceUntil: game.variationGrace?.until, stability: game.stability, score: game.score, incidentsResolved: game.incidentsResolved, incorrectActions: game.incorrectActions, damagedSystems: game.damagedSystems, unauthorizedWormholes: game.unauthorizedWormholes, outcome: game.outcome, endReason: game.endReason, log: game.log.slice(0, 5), moduleStatus: { router: game.router.resolved, reactor: game.reactor.resolved, translation: game.translation.resolved, authentication: game.authentication.resolved, packet: game.packet.resolved }, modifierText: game.modifier === 'none' ? undefined : modifierDescription(game.modifier, game.language), bonusText: game.bonusObjective ? bonusDescription(game.bonusObjective, game.language) : undefined, bonusEarned: game.bonusObjective ? bonusEarnedForGame(game) : undefined, hint }
+  if (role === 'operator') { const { affinity: _affinity, baseFrequency: _frequency, protocol: _protocol, ...router } = game.router; return { ...common, operator: { router, reactor: { resolved: game.reactor.resolved, dials: game.reactor.dials }, translation: { resolved: game.translation.resolved, glyphs: game.translation.glyphs }, authentication: { resolved: game.authentication.resolved, candidates: game.authentication.candidates.map(({ id, channel, label }) => ({ id, channel, label })) }, packet: { resolved: game.packet.resolved, tiles: game.packet.tiles.map(({ id, label }) => ({ id, label })), message: game.packet.resolved ? game.packet.message : undefined } } } }
   const de = game.language === 'de'
   const config: Record<Exclude<RoleId, 'operator'>, { title: string; subtitle: string; panels: RoleView['panels'] }> = de ? {
     engineer: { title: 'Systemingenieur', subtitle: 'Du hast die Prozeduren. Lass die anderen die Eingaben liefern.', panels: engineerPanels(game) }, analyst: { title: 'Telemetrieanalyst', subtitle: 'Vertrau den Zahlen. Die meisten davon sind wahrscheinlich echt.', panels: analystPanels(game) }, archivist: { title: 'Xeno-Archivar', subtitle: 'Spezies, Symbole und uralte Ausnahmen sind jetzt dein Problem.', panels: archivistPanels(game) }, specialist: { title: 'Missionsspezialist', subtitle: 'Kleine Crew, großes Handbuch. Du hast alle Spezialhinweise.', panels: [...analystPanels(game), ...archivistPanels(game), ...engineerPanels(game)] }, researcher: { title: 'Forschungsleitung', subtitle: 'Du betreust die Live-Telemetrie und das gesamte Xeno-Archiv.', panels: [...analystPanels(game), ...archivistPanels(game)] },

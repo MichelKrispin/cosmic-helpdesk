@@ -70,6 +70,7 @@ No database, gameplay relay, voice chat, account, or analytics is used. PeerJS's
 - The header counts down to the next pressure surge. When a surge changes puzzle data, an answer calculated from the immediately previous readings remains valid for five seconds.
 - Before each campaign mission, every player receives a shared story dossier with the previous chapter’s outcome, the new crisis, narrative objectives, assigned roles, and current variations. The timer stays paused until the host begins the mission.
 - Campaign levels 5 and 11 add Caller Authentication: the Operator chooses among opaque channels while timing, challenge-response, and certificate evidence is split across specialist manuals.
+- Campaign levels 6, 9, and 16 add Temporal Packet Reconstruction: the Operator orders opaque blocks while timestamp, epoch-direction, and checksum clues are distributed across the crew. Pressure surges change the live timestamps, with a five-second grace period for the previous ordering.
 - A deterministic seed creates the caller species, glyphs, telemetry, node layout, and valid solutions.
 - The host selects Training, Standard, or Emergency. Harder shifts are shorter, apply stronger recurring stability damage, and award larger score multipliers.
 - A shift is won only by resolving every active incident. Running out of time or stability loses the shift.
