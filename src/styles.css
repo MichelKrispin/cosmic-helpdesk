@@ -204,6 +204,13 @@ nav, .app-shell > header { height: 92px; max-width: 1280px; margin: auto; paddin
 .packet-tiles button:disabled { opacity: .25; cursor: not-allowed; }
 .packet-actions { display: grid; grid-template-columns: .65fr 1fr; gap: 8px; }.packet-actions .clear-button { margin-top: 14px; }
 .packet-message { margin-top: 12px; padding: 12px; border: 1px solid #3e695e; background: #0d201c; }.packet-message small { color: var(--mint); font: 8px 'DM Mono'; }.packet-message p { margin: 7px 0 0; color: #d1d6dc; font-size: 12px; line-height: 1.5; }
+.consent-label { display: block; margin: 15px 0 7px; color: #7e879a; font: 8px 'DM Mono'; letter-spacing: .11em; }
+.consent-responses, .consent-permissions { display: grid; grid-template-columns: repeat(auto-fit, minmax(95px, 1fr)); gap: 7px; }
+.consent-responses button, .consent-permissions button { min-height: 44px; padding: 8px; border: 1px solid #465066; background: #0a0f19; color: #a7adba; font: 8px 'DM Mono'; cursor: pointer; }
+.consent-responses button.selected { border-color: var(--pink); color: var(--pink); background: #291522; box-shadow: 0 0 13px #ff6fae22; }
+.consent-responses button:disabled, .consent-permissions button:disabled { opacity: .3; cursor: not-allowed; }
+.consent-order { min-height: 46px; padding: 8px; border: 1px dashed #4d566b; background: #090e18; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.consent-order span { padding: 6px 8px; background: #2b1726; color: var(--pink); font: 8px 'DM Mono'; }.consent-order i { margin: auto; color: #606a7e; font-style: normal; }
 .node-map { height: 250px; position: relative; border: 1px solid #2a3345; background: radial-gradient(circle, #1e3740 0, transparent 2px); background-size: 18px 18px; }
 .node-map::before, .node-map::after { content: ''; position: absolute; background: #3e6570; height: 1px; width: 63%; left: 18%; top: 50%; transform: rotate(28deg); }
 .node-map::after { transform: rotate(-28deg); }

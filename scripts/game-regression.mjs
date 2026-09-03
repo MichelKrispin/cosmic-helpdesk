@@ -133,6 +133,62 @@ try {
   const packetGraceAccepted = game.applyAction(driftedPacket, { id: 'packet-grace', type: 'packet-submit', tileIds: oldPacketOrder }, startedAt + 12_000)
   assert.equal(packetGraceAccepted.packet.resolved, true, 'the pre-surge packet order must remain valid during grace')
 
+  const consentLevel = game.createGame(1212, 4, 'en', startedAt, 'standard', 'campaign', 12)
+  const consentRepeat = game.createGame(1212, 4, 'en', startedAt, 'standard', 'campaign', 12)
+  assert.deepEqual(consentLevel.consent, consentRepeat.consent, 'consent handshake generation must be deterministic for a campaign seed')
+  assert.deepEqual(new Set(consentLevel.consent.responses.map(response => response.kind)), new Set(['yes', 'silence', 'no']))
+  assert.deepEqual(consentLevel.consent.requiredSequence, ['connect', 'disconnect'], 'level 12 must introduce the short handshake')
+  const finalConsent = game.createGame(1616, 4, 'en', startedAt, 'standard', 'campaign', 16)
+  assert.deepEqual(finalConsent.consent.requiredSequence, ['connect', 'retain', 'disconnect'], 'the finale must require the full handshake')
+  assert.equal(finalConsent.consent.requiredSequence.includes('copy'), false)
+  assert.equal(finalConsent.consent.requiredSequence.includes('reopen'), false)
+
+  const operatorConsent = game.viewForRole(consentLevel, 'operator', startedAt)
+  assert.equal(operatorConsent.operator.consent.ready, false)
+  assert.doesNotMatch(JSON.stringify(operatorConsent.operator.consent), /correctResponseId|requiredSequence|EXPLICIT YES|SILENCE|EXPLICIT NO|"kind"/, 'the Operator must not receive the response meaning or solution')
+  const analystConsent = JSON.stringify(game.viewForRole(consentLevel, 'analyst', startedAt).manual)
+  const archivistConsent = JSON.stringify(game.viewForRole(consentLevel, 'archivist', startedAt).manual)
+  const engineerConsent = JSON.stringify(game.viewForRole(consentLevel, 'engineer', startedAt).manual)
+  assert.match(analystConsent, /Verify current intent/)
+  assert.match(analystConsent, /EXPLICIT YES/)
+  assert.doesNotMatch(analystConsent, /Invited access|ALLOWED/)
+  assert.match(archivistConsent, /Map the limited scope/)
+  assert.match(archivistConsent, /Invited access/)
+  assert.doesNotMatch(archivistConsent, /EXPLICIT YES|RESPONSE CHANNEL A/)
+  assert.match(engineerConsent, /Order handshake phases/)
+  assert.doesNotMatch(engineerConsent, /ALLOWED|DENIED|RESPONSE CHANNEL A/)
+  const specialistConsent = JSON.stringify(game.viewForRole(consentLevel, 'specialist', startedAt).manual)
+  assert.match(specialistConsent, /Verify current intent/)
+  assert.match(specialistConsent, /Map the limited scope/)
+  assert.match(specialistConsent, /Order handshake phases/, 'two-player crews must receive every consent clue domain')
+
+  const lockedConsent = game.applyAction(consentLevel, { id: 'consent-too-early', type: 'consent-submit', ...game.consentSolution(consentLevel) }, startedAt + 1)
+  assert.equal(lockedConsent.consent.resolved, false, 'consent must remain locked until every prerequisite module is resolved')
+  assert.equal(lockedConsent.stability, consentLevel.stability, 'the safety lock must not punish an early submission')
+  let readyConsent = consentLevel
+  const consentPair = game.routerSolution(readyConsent)
+  const consentNodes = consentPair.map(symbol => readyConsent.router.nodes.find(node => node.symbol === symbol).id)
+  readyConsent = game.applyAction(readyConsent, { id: 'consent-router', type: 'router-connect', a: consentNodes[0], b: consentNodes[1] }, startedAt + 2)
+  readyConsent = game.applyAction(readyConsent, { id: 'consent-translation', type: 'translation-submit', sequence: game.translationSolution(readyConsent) }, startedAt + 3)
+  assert.equal(game.viewForRole(readyConsent, 'operator', startedAt + 3).operator.consent.ready, true)
+  const silentResponse = readyConsent.consent.responses.find(response => response.kind === 'silence').id
+  const silenceRejected = game.applyAction(readyConsent, { id: 'consent-silence', type: 'consent-submit', permissions: game.consentSolution(readyConsent).permissions, responseId: silentResponse }, startedAt + 4)
+  assert.equal(silenceRejected.consent.resolved, false)
+  assert.ok(silenceRejected.stability < readyConsent.stability)
+  assert.match(silenceRejected.log[0], /silence is not consent/)
+  let consentMission = game.applyAction(readyConsent, { id: 'consent-correct', type: 'consent-submit', ...game.consentSolution(readyConsent) }, startedAt + 4)
+  assert.equal(consentMission.consent.resolved, true)
+  for (let pass = 0; pass < 2 && consentMission.outcome === 'playing'; pass += 1) {
+    if (!consentMission.router.resolved) {
+      const pair = game.routerSolution(consentMission)
+      const ids = pair.map(symbol => consentMission.router.nodes.find(node => node.symbol === symbol).id)
+      consentMission = game.applyAction(consentMission, { id: `consent-followup-router-${pass}`, type: 'router-connect', a: ids[0], b: ids[1] }, startedAt + 10 + pass)
+    }
+    if (!consentMission.translation.resolved) consentMission = game.applyAction(consentMission, { id: `consent-followup-translation-${pass}`, type: 'translation-submit', sequence: game.translationSolution(consentMission) }, startedAt + 12 + pass)
+    if (!consentMission.consent.resolved) consentMission = game.applyAction(consentMission, { id: `consent-followup-${pass}`, type: 'consent-submit', ...game.consentSolution(consentMission) }, startedAt + 14 + pass)
+  }
+  assert.equal(consentMission.outcome, 'won', 'consent campaign level 12 must have a deterministic solution path')
+
   for (const levelId of [6, 9, 16]) {
     let mission = game.createGame(900 + levelId, 4, 'en', startedAt, 'standard', 'campaign', levelId)
     for (let pass = 0; pass < 2 && mission.outcome === 'playing'; pass += 1) {
@@ -145,6 +201,7 @@ try {
         mission = game.applyAction(mission, { id: `packet-router-${levelId}-${pass}`, type: 'router-connect', a: ids[0], b: ids[1] }, startedAt + pass * 10 + 3)
       }
       if (mission.activeModules.includes('translation') && !mission.translation.resolved) mission = game.applyAction(mission, { id: `packet-translation-${levelId}-${pass}`, type: 'translation-submit', sequence: game.translationSolution(mission) }, startedAt + pass * 10 + 4)
+      if (mission.activeModules.includes('consent') && !mission.consent.resolved) mission = game.applyAction(mission, { id: `packet-consent-${levelId}-${pass}`, type: 'consent-submit', ...game.consentSolution(mission) }, startedAt + pass * 10 + 5)
     }
     assert.equal(mission.outcome, 'won', `temporal packet campaign level ${levelId} must have a deterministic solution path`)
   }

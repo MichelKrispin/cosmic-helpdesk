@@ -2,7 +2,7 @@ export type Locale = 'en' | 'de'
 export type RoleId = 'operator' | 'engineer' | 'analyst' | 'archivist' | 'specialist' | 'researcher'
 export type DifficultyId = 'training' | 'standard' | 'emergency'
 export type GameStyle = 'fast' | 'campaign'
-export type ModuleId = 'router' | 'reactor' | 'translation' | 'authentication' | 'packet'
+export type ModuleId = 'router' | 'reactor' | 'translation' | 'authentication' | 'packet' | 'consent'
 
 export type Player = { id: string; name: string; role: RoleId | null; connected: boolean; isHost: boolean }
 export type SymbolId = 'nova' | 'halo' | 'rift' | 'prism'
@@ -11,6 +11,9 @@ export type ButtonColor = 'amber' | 'cyan' | 'magenta' | 'lime'
 export type AuthenticationKind = 'genuine' | 'relay-generated' | 'corrupted'
 export type AuthenticationCandidate = { id: string; channel: string; label: string; timestamp: string; waveform: string; challenge: string; certificate: string; kind: AuthenticationKind }
 export type PacketTile = { id: string; label: string; timestamp: number; checksumIn: string; checksumOut: string }
+export type ConsentPermission = 'connect' | 'copy' | 'retain' | 'reopen' | 'disconnect'
+export type ConsentResponseKind = 'yes' | 'silence' | 'no'
+export type ConsentResponse = { id: string; channel: string; kind: ConsentResponseKind }
 type CampaignModifier = 'none' | 'solar-static' | 'fragile-controls' | 'router-drift' | 'color-flux' | 'reactor-echo'
 type BonusObjective = 'no-mistakes' | 'high-stability' | 'fast-finish'
 
@@ -25,6 +28,7 @@ export type FullGame = {
   translation: { resolved: boolean; glyphs: SymbolId[]; sequence: ButtonColor[]; paletteShift: number; direction: 'forward' | 'reverse' }
   authentication: { resolved: boolean; candidates: AuthenticationCandidate[]; correctId: string }
   packet: { resolved: boolean; tiles: PacketTile[]; direction: 'ascending' | 'descending'; message: string }
+  consent: { resolved: boolean; permissions: ConsentPermission[]; requiredSequence: ConsentPermission[]; responses: ConsentResponse[]; correctResponseId: string; subject: string }
 }
 
 export type GameAction =
@@ -33,12 +37,14 @@ export type GameAction =
   | { id: string; type: 'translation-submit'; sequence: ButtonColor[] }
   | { id: string; type: 'authentication-submit'; candidateId: string }
   | { id: string; type: 'packet-submit'; tileIds: string[] }
+  | { id: string; type: 'consent-submit'; permissions: ConsentPermission[]; responseId: string }
 export type GameActionInput =
   | { type: 'router-connect'; a: string; b: string }
   | { type: 'reactor-calibrate'; dials: [number, number, number] }
   | { type: 'translation-submit'; sequence: ButtonColor[] }
   | { type: 'authentication-submit'; candidateId: string }
   | { type: 'packet-submit'; tileIds: string[] }
+  | { type: 'consent-submit'; permissions: ConsentPermission[]; responseId: string }
 
 export type RoleView = {
   role: RoleId; title: string; subtitle: string
@@ -49,7 +55,7 @@ export type GameView = {
   seed: number; language: Locale; gameStyle: GameStyle; campaignLevel?: number; difficulty: DifficultyId; activeModules: ModuleId[]; targetIncidents: number; now: number; endsAt: number; nextPressureAt: number; variationGraceUntil?: number; stability: number; score: number; incidentsResolved: number
   incorrectActions: number; damagedSystems: number; unauthorizedWormholes: number; outcome: FullGame['outcome']
   endReason?: string; log: string[]; moduleStatus: Record<ModuleId, boolean>; modifierText?: string; bonusText?: string; bonusEarned?: boolean; hint?: string
-  operator?: { router: Omit<FullGame['router'], 'affinity' | 'baseFrequency' | 'protocol'>; reactor: Omit<FullGame['reactor'], 'telemetry' | 'speciesOffset' | 'formula'>; translation: Omit<FullGame['translation'], 'sequence' | 'paletteShift' | 'direction'>; authentication: { resolved: boolean; candidates: Array<Pick<AuthenticationCandidate, 'id' | 'channel' | 'label'>> }; packet: { resolved: boolean; tiles: Array<Pick<PacketTile, 'id' | 'label'>>; message?: string } }
+  operator?: { router: Omit<FullGame['router'], 'affinity' | 'baseFrequency' | 'protocol'>; reactor: Omit<FullGame['reactor'], 'telemetry' | 'speciesOffset' | 'formula'>; translation: Omit<FullGame['translation'], 'sequence' | 'paletteShift' | 'direction'>; authentication: { resolved: boolean; candidates: Array<Pick<AuthenticationCandidate, 'id' | 'channel' | 'label'>> }; packet: { resolved: boolean; tiles: Array<Pick<PacketTile, 'id' | 'label'>>; message?: string }; consent: { resolved: boolean; ready: boolean; permissions: ConsentPermission[]; responses: Array<Pick<ConsentResponse, 'id' | 'channel'>>; subject: string } }
   manual?: RoleView
 }
 
@@ -251,7 +257,7 @@ const campaignNarrative: CampaignNarrative[] = [
     objective: { en: 'Verify the Assembly and recover the final directive fragment without granting broad access.', de: 'Prüft die Versammlung und bergt das letzte Direktivenfragment, ohne weitreichenden Zugang zu gewähren.' },
     transition: { en: 'The relay asks whether preserving conscious copies was wrong. Then two Earths appear on one route.', de: 'Das Relais fragt, ob die Bewahrung bewusster Kopien falsch war. Dann erscheinen zwei Erden auf einer Route.' },
     archiveFragment: { en: '...INVITATION', de: '... EINLADUNG' },
-    moduleOutcomes: { router: { en: 'The Assembly receives a narrow, revocable channel.', de: 'Die Versammlung erhält einen engen, widerrufbaren Kanal.' }, translation: { en: 'The origin record confirms: SILENCE WAS ACCEPTED AS CONSENT.', de: 'Der Ursprungsbericht bestätigt: SCHWEIGEN WURDE ALS ZUSTIMMUNG AKZEPTIERT.' } },
+    moduleOutcomes: { router: { en: 'The Assembly receives a narrow, revocable channel.', de: 'Die Versammlung erhält einen engen, widerrufbaren Kanal.' }, translation: { en: 'The origin record confirms: SILENCE WAS ACCEPTED AS CONSENT.', de: 'Der Ursprungsbericht bestätigt: SCHWEIGEN WURDE ALS ZUSTIMMUNG AKZEPTIERT.' }, consent: { en: 'Explicit permission opens a narrow, revocable channel; silence is no longer accepted.', de: 'Ausdrückliche Erlaubnis öffnet einen engen, widerrufbaren Kanal; Schweigen gilt nicht länger als Zustimmung.' } },
   },
   {
     summary: { en: 'Present Earth and its conscious copy occupy the same collapsing route.', de: 'Die gegenwärtige Erde und ihre bewusste Kopie belegen dieselbe einstürzende Route.' },
@@ -291,7 +297,7 @@ const campaignNarrative: CampaignNarrative[] = [
     caller: { en: 'Mara Vale // MV-404-0214 // original crew', de: 'Mara Vale // MV-404-0214 // ursprüngliche Crew' },
     objective: { en: 'Return Mara’s original crew without creating another copy.', de: 'Holt Maras ursprüngliche Crew zurück, ohne eine weitere Kopie zu erzeugen.' },
     transition: { en: 'One unopened route remains. The Door asks: “May I open it?” Either answer is respected.', de: 'Eine ungeöffnete Route bleibt. Die Tür fragt: „Darf ich sie öffnen?“ Beide Antworten werden respektiert.' },
-    moduleOutcomes: { packet: { en: 'The last time-locked packet confirms Mara’s current intent.', de: 'Das letzte zeitgesperrte Paket bestätigt Maras aktuelle Absicht.' }, reactor: { en: 'The physical route has enough power for transport, not scanning.', de: 'Die physische Route hat genug Energie für Transport statt Scannen.' }, router: { en: 'Route signature confirms continuity: no copy destination exists.', de: 'Die Routensignatur bestätigt Kontinuität: Es existiert kein Kopierziel.' }, translation: { en: 'Mara’s final packet states current, specific consent to come home.', de: 'Maras letztes Paket enthält ihre aktuelle, konkrete Zustimmung zur Heimkehr.' } },
+    moduleOutcomes: { packet: { en: 'The last time-locked packet confirms Mara’s current intent.', de: 'Das letzte zeitgesperrte Paket bestätigt Maras aktuelle Absicht.' }, reactor: { en: 'The physical route has enough power for transport, not scanning.', de: 'Die physische Route hat genug Energie für Transport statt Scannen.' }, router: { en: 'Route signature confirms continuity: no copy destination exists.', de: 'Die Routensignatur bestätigt Kontinuität: Es existiert kein Kopierziel.' }, translation: { en: 'Mara’s final packet states current, specific consent to come home.', de: 'Maras letztes Paket enthält ihre aktuelle, konkrete Zustimmung zur Heimkehr.' }, consent: { en: 'Mara’s explicit consent completes the handshake; Copy and Reopen remain denied.', de: 'Maras ausdrückliche Zustimmung schließt den Handshake ab; Kopieren und Wiederöffnen bleiben verweigert.' } },
   },
 ]
 
@@ -301,8 +307,9 @@ export const campaignLevels: CampaignLevel[] = baseCampaignLevels.map((level, in
   activeModules: level.id === 5 || level.id === 11 ? ['authentication', 'router', 'translation']
     : level.id === 6 ? ['packet', 'translation']
       : level.id === 9 ? ['packet', 'router']
-        : level.id === 16 ? ['packet', ...level.activeModules]
-          : level.activeModules,
+        : level.id === 12 ? ['router', 'translation', 'consent']
+          : level.id === 16 ? ['packet', ...level.activeModules, 'consent']
+            : level.activeModules,
 }))
 
 export function campaignLevel(level: number): CampaignLevel { return campaignLevels[Math.max(0, Math.min(campaignLevels.length - 1, level - 1))] }
@@ -416,6 +423,25 @@ function createTemporalPacket(levelId: number, language: Locale, random: () => n
   return packet
 }
 
+function createConsentHandshake(levelId: number, language: Locale, random: () => number): FullGame['consent'] {
+  const de = language === 'de'
+  const permissions: ConsentPermission[] = ['connect', 'copy', 'retain', 'reopen', 'disconnect']
+  const requiredSequence: ConsentPermission[] = levelId === 16 ? ['connect', 'retain', 'disconnect'] : ['connect', 'disconnect']
+  const responses = shuffle<ConsentResponse>([
+    { id: '', channel: '', kind: 'yes' },
+    { id: '', channel: '', kind: 'silence' },
+    { id: '', channel: '', kind: 'no' },
+  ], random).map((response, index) => ({ ...response, id: `CONSENT-${index + 1}`, channel: `${de ? 'ANTWORTKANAL' : 'RESPONSE CHANNEL'} ${String.fromCharCode(65 + index)}` }))
+  return {
+    resolved: false,
+    permissions,
+    requiredSequence,
+    responses,
+    correctResponseId: responses.find(response => response.kind === 'yes')!.id,
+    subject: levelId === 16 ? (de ? 'Mara Vale und ursprüngliche Crew' : 'Mara Vale and original crew') : (de ? 'Stille Versammlung' : 'Quiet Assembly'),
+  }
+}
+
 export function createGame(seed: number, playerCount: number, language: Locale = 'de', now = Date.now(), difficulty: DifficultyId = 'standard', gameStyle: GameStyle = 'fast', campaignLevelId = 1): FullGame {
   const random = mulberry32(seed)
   const caller = species[Math.floor(random() * species.length)]
@@ -436,6 +462,7 @@ export function createGame(seed: number, playerCount: number, language: Locale =
   const followUpModule = gameStyle === 'campaign' && level.id >= 9 ? activeModules[seed % activeModules.length] : undefined
   const authentication = createAuthenticationCandidates(level.id, language, random)
   const packet = createTemporalPacket(level.id, language, random)
+  const consent = createConsentHandshake(level.id, language, random)
   const state: FullGame = {
     seed, playerCount, language, gameStyle, campaignLevel: gameStyle === 'campaign' ? level.id : undefined, difficulty, shiftRules: { ...settings }, activeModules, startedAt: now, endsAt: now + settings.durationMs, lastPressureAt: now, stability: 100,
     incidentsResolved: 0, incorrectActions: 0, damagedSystems: 0, unauthorizedWormholes: Math.floor(random() * 3), score: 0, outcome: 'playing', modifier, bonusObjective, forgivenModules: [],
@@ -444,7 +471,7 @@ export function createGame(seed: number, playerCount: number, language: Locale =
       ? (language === 'de' ? `Kapitel ${level.id}: ${level.title.de}. Der Auftrag beginnt.` : `Chapter ${level.id}: ${level.title.en}. The mission begins.`)
       : (language === 'de' ? `Schicht gestartet. ${activeModules.length === 1 ? 'Ein dringender Vorfall blinkt' : `${activeModules.length} dringende Vorfälle blinken`}.` : `Shift started. ${activeModules.length === 1 ? 'One priority incident is blinking' : `${activeModules.length} priority incidents are blinking`}.`)],
     router: { resolved: false, nodes: symbols.map((symbol, i) => ({ id: `N${i + 1}`, symbol, code: `${String.fromCharCode(65 + i)}-${Math.floor(random() * 90 + 10)}` })), species: caller[language], affinity: caller.affinity, baseFrequency: 35 + Math.floor(random() * 10), protocol },
-    reactor: { resolved: false, dials: [0, 0, 0], telemetry, speciesOffset: caller.offset, formula }, translation: { resolved: false, glyphs, sequence: [], paletteShift, direction }, authentication, packet,
+    reactor: { resolved: false, dials: [0, 0, 0], telemetry, speciesOffset: caller.offset, formula }, translation: { resolved: false, glyphs, sequence: [], paletteShift, direction }, authentication, packet, consent,
   }
   state.translation.sequence = translationSolution(state)
   state.score = scoreForGame(state, now)
@@ -485,6 +512,13 @@ export function translationSolution(game: FullGame): ButtonColor[] {
 export function authenticationSolution(game: FullGame) { return game.authentication.correctId }
 export function packetSolution(game: Pick<FullGame, 'packet'>) {
   return [...game.packet.tiles].sort((a, b) => game.packet.direction === 'ascending' ? a.timestamp - b.timestamp : b.timestamp - a.timestamp).map(tile => tile.id)
+}
+export function consentSolution(game: Pick<FullGame, 'consent'>) {
+  return { permissions: [...game.consent.requiredSequence], responseId: game.consent.correctResponseId }
+}
+function consentReady(game: FullGame) {
+  const resolved: Record<ModuleId, boolean> = { router: game.router.resolved, reactor: game.reactor.resolved, translation: game.translation.resolved, authentication: game.authentication.resolved, packet: game.packet.resolved, consent: game.consent.resolved }
+  return game.activeModules.filter(module => module !== 'consent').every(module => resolved[module])
 }
 function refreshPacketChecksums(packet: FullGame['packet']) {
   const chain = ['K7', 'M2', 'Q9', 'R4']
@@ -539,7 +573,12 @@ function beginFollowUp(game: FullGame) {
     game.packet.tiles.forEach((tile, index) => { tile.timestamp = values[(index + 1) % values.length] })
     refreshPacketChecksums(game.packet)
   }
-  const names: Record<ModuleId, string> = game.language === 'de' ? { router: 'Quantenrouter', reactor: 'Reaktorkalibrierung', translation: 'Übersetzungsmatrix', authentication: 'Anrufer-Authentifizierung', packet: 'Zeitpaket-Rekonstruktion' } : { router: 'Quantum Router', reactor: 'Reactor Calibration', translation: 'Translation Matrix', authentication: 'Caller Authentication', packet: 'Temporal Packet Reconstruction' }
+  if (module === 'consent') {
+    game.consent.resolved = false
+    game.consent.responses = [...game.consent.responses.slice(1), game.consent.responses[0]]
+    game.consent.correctResponseId = game.consent.responses.find(response => response.kind === 'yes')!.id
+  }
+  const names: Record<ModuleId, string> = game.language === 'de' ? { router: 'Quantenrouter', reactor: 'Reaktorkalibrierung', translation: 'Übersetzungsmatrix', authentication: 'Anrufer-Authentifizierung', packet: 'Zeitpaket-Rekonstruktion', consent: 'Zustimmungs-Handshake' } : { router: 'Quantum Router', reactor: 'Reactor Calibration', translation: 'Translation Matrix', authentication: 'Caller Authentication', packet: 'Temporal Packet Reconstruction', consent: 'Consent Handshake' }
   game.log.unshift(game.language === 'de' ? `Folgeticket eingegangen: ${names[module]} wurde mit neuen Daten wieder geöffnet.` : `Follow-up ticket received: ${names[module]} reopened with new data.`)
 }
 
@@ -557,8 +596,14 @@ export function applyAction(game: FullGame, action: GameAction, now = Date.now()
   if (action.type === 'translation-submit' && next.activeModules.includes('translation') && !next.translation.resolved) { correct = action.sequence.join(',') === translationSolution(next).join(','); usedGrace = !correct && !!grace?.translation && action.sequence.join(',') === grace.translation.join(','); correct ||= usedGrace; module = 'translation'; if (correct) next.translation.resolved = true }
   if (action.type === 'authentication-submit' && next.activeModules.includes('authentication') && !next.authentication.resolved) { correct = action.candidateId === next.authentication.correctId; module = 'authentication'; if (correct) next.authentication.resolved = true }
   if (action.type === 'packet-submit' && next.activeModules.includes('packet') && !next.packet.resolved) { correct = action.tileIds.join(',') === packetSolution(next).join(','); usedGrace = !correct && !!grace?.packet && action.tileIds.join(',') === grace.packet.join(','); correct ||= usedGrace; module = 'packet'; if (correct) next.packet.resolved = true }
+  if (action.type === 'consent-submit' && next.activeModules.includes('consent') && !next.consent.resolved) {
+    if (!consentReady(next)) return current
+    correct = action.permissions.join(',') === next.consent.requiredSequence.join(',') && action.responseId === next.consent.correctResponseId
+    module = 'consent'
+    if (correct) next.consent.resolved = true
+  }
   if (!module) return game
-  const moduleNames: Record<ModuleId, string> = next.language === 'de' ? { router: 'Quantenrouter', reactor: 'Reaktorkalibrierung', translation: 'Übersetzungsmatrix', authentication: 'Anrufer-Authentifizierung', packet: 'Zeitpaket-Rekonstruktion' } : { router: 'Quantum Router', reactor: 'Reactor Calibration', translation: 'Translation Matrix', authentication: 'Caller Authentication', packet: 'Temporal Packet Reconstruction' }
+  const moduleNames: Record<ModuleId, string> = next.language === 'de' ? { router: 'Quantenrouter', reactor: 'Reaktorkalibrierung', translation: 'Übersetzungsmatrix', authentication: 'Anrufer-Authentifizierung', packet: 'Zeitpaket-Rekonstruktion', consent: 'Zustimmungs-Handshake' } : { router: 'Quantum Router', reactor: 'Reactor Calibration', translation: 'Translation Matrix', authentication: 'Caller Authentication', packet: 'Temporal Packet Reconstruction', consent: 'Consent Handshake' }
   const forgiven = !correct && next.gameStyle === 'campaign' && (next.campaignLevel || 99) <= 2 && !next.forgivenModules.includes(module)
   if (correct) {
     next.incidentsResolved += 1; next.stability = Math.min(100, next.stability + 6)
@@ -570,13 +615,15 @@ export function applyAction(game: FullGame, action: GameAction, now = Date.now()
         reactor: `Der Kern hält. „${title}“ hat wieder genug Energie, um weiterzugehen.`,
         translation: `Die fremde Stimme ist verstanden. Ihre Nachricht wird Teil von „${title}“.`,
         authentication: `Die echte Stimme in „${title}“ wurde bestätigt; die anderen Kanäle bleiben geschützt.`,
-        packet: `Das Zeitpaket in „${title}“ wurde in der geprüften Reihenfolge zusammengesetzt.`
+        packet: `Das Zeitpaket in „${title}“ wurde in der geprüften Reihenfolge zusammengesetzt.`,
+        consent: `Der Zustimmungs-Handshake in „${title}“ wurde ausdrücklich und mit begrenzten Rechten bestätigt.`
       } : {
         router: `The path through “${title}” is open. The signal reaches its next destination.`,
         reactor: `The core holds. “${title}” has enough power to continue.`,
         translation: `The alien voice is understood. Its message becomes part of “${title}”.`,
         authentication: `The genuine voice in “${title}” is verified; the other channels remain protected.`,
-        packet: `The temporal packet in “${title}” is assembled in verified order.`
+        packet: `The temporal packet in “${title}” is assembled in verified order.`,
+        consent: `The consent handshake in “${title}” is explicit and limited to verified permissions.`
       }
       next.log.unshift(level.moduleOutcomes[module]?.[next.language] || narrative[module])
       if (module === 'packet') next.log.unshift(next.language === 'de' ? `Nachricht wiederhergestellt: „${next.packet.message}“` : `Message reconstructed: “${next.packet.message}”`)
@@ -589,6 +636,7 @@ export function applyAction(game: FullGame, action: GameAction, now = Date.now()
     const penalty = next.modifier === 'fragile-controls' ? 20 : 15
     next.incorrectActions += 1; next.stability = Math.max(0, next.stability - penalty); next.damagedSystems += next.incorrectActions % 2 === 0 ? 1 : 0; next.unauthorizedWormholes += action.type === 'translation-submit' ? 1 : 0
     next.log.unshift(next.language === 'de' ? `${moduleNames[module]} hat die Prozedur abgelehnt. Stabilität −${penalty}.` : `${moduleNames[module]} rejected the procedure. Stability −${penalty}.`)
+    if (action.type === 'consent-submit' && next.consent.responses.find(response => response.id === action.responseId)?.kind === 'silence') next.log.unshift(next.language === 'de' ? 'Zustimmungsprüfung fehlgeschlagen: Schweigen ist keine Zustimmung.' : 'Consent verification failed: silence is not consent.')
   }
   if (correct && next.incidentsResolved === next.activeModules.length && next.followUpModule && !next.followUpTriggered) beginFollowUp(next)
   if (next.stability <= 0) { next.outcome = 'lost'; next.completedAt = now; next.endReason = next.language === 'de' ? 'Die Stationsstabilität ist auf null gefallen. Der Helpdesk ist jetzt technisch gesehen eine Hilfskugel.' : 'Station stability reached zero. The helpdesk is now technically a help-sphere.' }
@@ -724,8 +772,32 @@ function packetEngineerPanel(game: FullGame): RoleView['panels'][number] {
   return { eyebrow: de ? 'Zeitpaket // Prüfsummenring' : 'Temporal packet // checksum ring', title: de ? 'Blockübergänge prüfen' : 'Verify block transitions', tone: 'mint', table: { headers: de ? ['Block', 'Eingang', 'Ausgang'] : ['Block', 'Input', 'Output'], rows: game.packet.tiles.map(tile => [tile.label, tile.checksumIn, tile.checksumOut]) }, notes: [de ? 'Der Ausgang jedes Blocks muss zum Eingang des nächsten passen. Der Ring bestätigt die Ordnung, verrät aber nicht, wo sie beginnt.' : 'Each block’s output must match the next block’s input. The ring confirms order but does not reveal where it begins.'] }
 }
 
+function consentAnalystPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'
+  const labels: Record<ConsentResponseKind, string> = de ? { yes: 'AUSDRÜCKLICHES JA', silence: 'SCHWEIGEN', no: 'AUSDRÜCKLICHES NEIN' } : { yes: 'EXPLICIT YES', silence: 'SILENCE', no: 'EXPLICIT NO' }
+  return { eyebrow: de ? 'Zustimmung // Live-Antwort' : 'Consent // live response', title: de ? 'Aktuelle Absicht prüfen' : 'Verify current intent', tone: 'orange', rows: game.consent.responses.map(response => ({ label: response.channel, value: labels[response.kind] })), notes: [de ? 'Nur ein ausdrückliches Ja ist Zustimmung. Schweigen und Nein müssen die Verbindung geschlossen halten.' : 'Only an explicit yes is consent. Silence and no must keep the connection closed.'] }
+}
+
+function consentArchivistPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'; const full = game.campaignLevel === 16
+  return { eyebrow: de ? 'Zustimmung // Berechtigungsakte' : 'Consent // permission record', title: de ? 'Begrenzten Umfang abbilden' : 'Map the limited scope', tone: 'pink', table: { headers: de ? ['Protokollphase', 'Steuerung', 'Status'] : ['Protocol phase', 'Control', 'Status'], rows: [
+    [de ? 'Eingeladener Zugang' : 'Invited access', de ? 'Verbinden' : 'Connect', de ? 'ERLAUBT' : 'ALLOWED'],
+    [de ? 'Empfang aufbewahren' : 'Receipt retention', de ? 'Aufbewahren' : 'Retain', full ? (de ? 'ERLAUBT' : 'ALLOWED') : (de ? 'VERWEIGERT' : 'DENIED')],
+    [de ? 'Widerrufbarer Abschluss' : 'Revocable closure', de ? 'Trennen' : 'Disconnect', de ? 'ERLAUBT' : 'ALLOWED'],
+    [de ? 'Duplikat erstellen' : 'Create duplicate', de ? 'Kopieren' : 'Copy', de ? 'VERWEIGERT' : 'DENIED'],
+    [de ? 'Später erneut öffnen' : 'Reopen later', de ? 'Wiederöffnen' : 'Reopen', de ? 'VERWEIGERT' : 'DENIED'],
+  ] }, notes: [de ? 'Nehmt nur erlaubte Steuerungen auf. Die Ingenieurakte bestimmt ihre Reihenfolge.' : 'Include allowed controls only. The engineering procedure determines their order.'] }
+}
+
+function consentEngineerPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'; const phases = game.campaignLevel === 16
+    ? (de ? ['1. Eingeladener Zugang', '2. Empfang aufbewahren', '3. Widerrufbarer Abschluss'] : ['1. Invited access', '2. Receipt retention', '3. Revocable closure'])
+    : (de ? ['1. Eingeladener Zugang', '2. Widerrufbarer Abschluss'] : ['1. Invited access', '2. Revocable closure'])
+  return { eyebrow: de ? 'Zustimmung // Sicherheitsprozedur' : 'Consent // safety procedure', title: de ? 'Handshake-Phasen ordnen' : 'Order handshake phases', tone: 'mint', notes: [...phases, de ? 'Keine Phase darf ergänzt, ausgelassen oder wiederholt werden.' : 'Do not add, omit, or repeat a phase.'] }
+}
+
 function engineerPanels(game: FullGame) {
-  return [game.activeModules.includes('authentication') && authenticationEngineerPanel(game), game.activeModules.includes('packet') && packetEngineerPanel(game), game.activeModules.includes('router') && routerRulesPanel(game), game.activeModules.includes('reactor') && reactorRulesPanel(game), game.activeModules.includes('translation') && translationRulesPanel(game)].filter(Boolean) as RoleView['panels']
+  return [game.activeModules.includes('authentication') && authenticationEngineerPanel(game), game.activeModules.includes('packet') && packetEngineerPanel(game), game.activeModules.includes('consent') && consentEngineerPanel(game), game.activeModules.includes('router') && routerRulesPanel(game), game.activeModules.includes('reactor') && reactorRulesPanel(game), game.activeModules.includes('translation') && translationRulesPanel(game)].filter(Boolean) as RoleView['panels']
 }
 
 function analystPanels(game: FullGame) {
@@ -734,6 +806,7 @@ function analystPanels(game: FullGame) {
   const panels: RoleView['panels'] = []
   if (game.activeModules.includes('authentication')) panels.push(authenticationAnalystPanel(game))
   if (game.activeModules.includes('packet')) panels.push(packetAnalystPanel(game))
+  if (game.activeModules.includes('consent')) panels.push(consentAnalystPanel(game))
   const meter = (value: number) => `${value}   ${'●'.repeat(value)}${'○'.repeat(5 - value)}`
   if (game.activeModules.includes('reactor')) panels.push({ eyebrow: de ? 'Live-Telemetrie' : 'Live telemetry', title: de ? 'Reaktordaten' : 'Reactor feed', tone: 'orange' as const, rows: [{ label: de ? '≋  Fluss' : '≋  Flux', value: meter(game.reactor.telemetry.flux) }, { label: '◉  Phase', value: meter(game.reactor.telemetry.phase) }, { label: de ? '❄  Kühlmittel' : '❄  Coolant', value: meter(game.reactor.telemetry.coolant) }], notes: [de ? 'Zahl und Leuchtpunkte zeigen dasselbe Signal von 0 bis 5.' : 'The number and lit pips show the same signal from 0 to 5.'] })
   if (game.activeModules.some(module => module === 'router' || module === 'translation')) panels.push({ eyebrow: de ? 'Live-Telemetrie' : 'Live telemetry', title: de ? 'Router & Station' : 'Router & station', tone: 'mint' as const, rows: [...(game.activeModules.includes('router') ? [{ label: de ? 'Routerfrequenz' : 'Router frequency', value: `${effectiveRouterFrequency(game)} THz` }, { label: de ? 'Frequenzband' : 'Frequency band', value: effectiveRouterFrequency(game) >= 50 ? (de ? 'HOCH' : 'HIGH') : (de ? 'NIEDRIG' : 'LOW') }] : []), ...(game.activeModules.includes('translation') ? [{ label: de ? 'Stationszustand' : 'Station condition', value: conditionLabel }] : [])], notes: game.activeModules.includes('router') ? (game.reactor.resolved ? [de ? 'Reaktor stabil: Frequenzaufschlag des Routers entfernt.' : 'Reactor stable: router frequency penalty removed.'] : [de ? 'Die Reaktorinstabilität addiert 20 THz zur Routerfrequenz.' : 'Reactor instability adds +20 THz to the router feed.']) : undefined })
@@ -744,6 +817,7 @@ function archivistPanels(game: FullGame) {
   const panels: RoleView['panels'] = []
   if (game.activeModules.includes('authentication')) panels.push(authenticationArchivistPanel(game))
   if (game.activeModules.includes('packet')) panels.push(packetArchivistPanel(game))
+  if (game.activeModules.includes('consent')) panels.push(consentArchivistPanel(game))
   if (game.activeModules.some(module => module === 'router' || module === 'reactor')) panels.push({ eyebrow: de ? 'Anruferdossier' : 'Caller dossier', title: game.router.species, tone: 'mint' as const, rows: [...(game.activeModules.includes('router') ? [{ label: de ? 'Routeraffinität' : 'Router affinity', value: game.router.affinity === 'angular' ? (de ? 'ECKIG' : 'ANGULAR') : (de ? 'KURVIG' : 'CURVED') }] : []), ...(game.activeModules.includes('reactor') ? [{ label: de ? 'Reaktor-Offset' : 'Reactor offset', value: `+${game.reactor.speciesOffset}` }] : [])], notes: [de ? 'Nenne sie niemals „den Kunden“. Ihre Rechtsabteilung überwacht diese Frequenz.' : 'Never call them “the customer.” Their legal department monitors this frequency.'] })
   if (game.activeModules.some(module => module === 'router' || module === 'translation')) {
     const glyphs = game.activeModules.includes('router') ? (Object.keys(symbolMeta) as SymbolId[]) : game.translation.glyphs
@@ -782,8 +856,8 @@ function campaignHint(game: FullGame, now: number, role: RoleId) {
 
 export function viewForRole(game: FullGame, role: RoleId, now = Date.now()): GameView {
   const hint = campaignHint(game, now, role)
-  const common: GameView = { seed: game.seed, language: game.language, gameStyle: game.gameStyle, campaignLevel: game.campaignLevel, difficulty: game.difficulty, activeModules: game.activeModules, targetIncidents: game.targetIncidents, now, endsAt: game.endsAt, nextPressureAt: Math.min(game.endsAt, game.lastPressureAt + game.shiftRules.pressureEveryMs), variationGraceUntil: game.variationGrace?.until, stability: game.stability, score: game.score, incidentsResolved: game.incidentsResolved, incorrectActions: game.incorrectActions, damagedSystems: game.damagedSystems, unauthorizedWormholes: game.unauthorizedWormholes, outcome: game.outcome, endReason: game.endReason, log: game.log.slice(0, 5), moduleStatus: { router: game.router.resolved, reactor: game.reactor.resolved, translation: game.translation.resolved, authentication: game.authentication.resolved, packet: game.packet.resolved }, modifierText: game.modifier === 'none' ? undefined : modifierDescription(game.modifier, game.language), bonusText: game.bonusObjective ? bonusDescription(game.bonusObjective, game.language) : undefined, bonusEarned: game.bonusObjective ? bonusEarnedForGame(game) : undefined, hint }
-  if (role === 'operator') { const { affinity: _affinity, baseFrequency: _frequency, protocol: _protocol, ...router } = game.router; return { ...common, operator: { router, reactor: { resolved: game.reactor.resolved, dials: game.reactor.dials }, translation: { resolved: game.translation.resolved, glyphs: game.translation.glyphs }, authentication: { resolved: game.authentication.resolved, candidates: game.authentication.candidates.map(({ id, channel, label }) => ({ id, channel, label })) }, packet: { resolved: game.packet.resolved, tiles: game.packet.tiles.map(({ id, label }) => ({ id, label })), message: game.packet.resolved ? game.packet.message : undefined } } } }
+  const common: GameView = { seed: game.seed, language: game.language, gameStyle: game.gameStyle, campaignLevel: game.campaignLevel, difficulty: game.difficulty, activeModules: game.activeModules, targetIncidents: game.targetIncidents, now, endsAt: game.endsAt, nextPressureAt: Math.min(game.endsAt, game.lastPressureAt + game.shiftRules.pressureEveryMs), variationGraceUntil: game.variationGrace?.until, stability: game.stability, score: game.score, incidentsResolved: game.incidentsResolved, incorrectActions: game.incorrectActions, damagedSystems: game.damagedSystems, unauthorizedWormholes: game.unauthorizedWormholes, outcome: game.outcome, endReason: game.endReason, log: game.log.slice(0, 5), moduleStatus: { router: game.router.resolved, reactor: game.reactor.resolved, translation: game.translation.resolved, authentication: game.authentication.resolved, packet: game.packet.resolved, consent: game.consent.resolved }, modifierText: game.modifier === 'none' ? undefined : modifierDescription(game.modifier, game.language), bonusText: game.bonusObjective ? bonusDescription(game.bonusObjective, game.language) : undefined, bonusEarned: game.bonusObjective ? bonusEarnedForGame(game) : undefined, hint }
+  if (role === 'operator') { const { affinity: _affinity, baseFrequency: _frequency, protocol: _protocol, ...router } = game.router; return { ...common, operator: { router, reactor: { resolved: game.reactor.resolved, dials: game.reactor.dials }, translation: { resolved: game.translation.resolved, glyphs: game.translation.glyphs }, authentication: { resolved: game.authentication.resolved, candidates: game.authentication.candidates.map(({ id, channel, label }) => ({ id, channel, label })) }, packet: { resolved: game.packet.resolved, tiles: game.packet.tiles.map(({ id, label }) => ({ id, label })), message: game.packet.resolved ? game.packet.message : undefined }, consent: { resolved: game.consent.resolved, ready: consentReady(game), permissions: game.consent.permissions, responses: game.consent.responses.map(({ id, channel }) => ({ id, channel })), subject: game.consent.subject } } } }
   const de = game.language === 'de'
   const config: Record<Exclude<RoleId, 'operator'>, { title: string; subtitle: string; panels: RoleView['panels'] }> = de ? {
     engineer: { title: 'Systemingenieur', subtitle: 'Du hast die Prozeduren. Lass die anderen die Eingaben liefern.', panels: engineerPanels(game) }, analyst: { title: 'Telemetrieanalyst', subtitle: 'Vertrau den Zahlen. Die meisten davon sind wahrscheinlich echt.', panels: analystPanels(game) }, archivist: { title: 'Xeno-Archivar', subtitle: 'Spezies, Symbole und uralte Ausnahmen sind jetzt dein Problem.', panels: archivistPanels(game) }, specialist: { title: 'Missionsspezialist', subtitle: 'Kleine Crew, großes Handbuch. Du hast alle Spezialhinweise.', panels: [...analystPanels(game), ...archivistPanels(game), ...engineerPanels(game)] }, researcher: { title: 'Forschungsleitung', subtitle: 'Du betreust die Live-Telemetrie und das gesamte Xeno-Archiv.', panels: [...analystPanels(game), ...archivistPanels(game)] },

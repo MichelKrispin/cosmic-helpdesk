@@ -71,6 +71,7 @@ No database, gameplay relay, voice chat, account, or analytics is used. PeerJS's
 - Before each campaign mission, every player receives a shared story dossier with the previous chapter’s outcome, the new crisis, narrative objectives, assigned roles, and current variations. The timer stays paused until the host begins the mission.
 - Campaign levels 5 and 11 add Caller Authentication: the Operator chooses among opaque channels while timing, challenge-response, and certificate evidence is split across specialist manuals.
 - Campaign levels 6, 9, and 16 add Temporal Packet Reconstruction: the Operator orders opaque blocks while timestamp, epoch-direction, and checksum clues are distributed across the crew. Pressure surges change the live timestamps, with a five-second grace period for the previous ordering.
+- Campaign levels 12 and 16 add Consent Handshake: the crew must identify an explicit yes, map the allowed permissions, and order the protocol phases. The controls stay locked until every other mission check is complete, and silence always fails verification.
 - A deterministic seed creates the caller species, glyphs, telemetry, node layout, and valid solutions.
 - The host selects Training, Standard, or Emergency. Harder shifts are shorter, apply stronger recurring stability damage, and award larger score multipliers.
 - A shift is won only by resolving every active incident. Running out of time or stability loses the shift.
