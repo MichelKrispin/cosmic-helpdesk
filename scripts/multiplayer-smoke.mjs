@@ -198,9 +198,52 @@ try {
   const hostOverflow = await host.eval('document.documentElement.scrollWidth > window.innerWidth')
   const clientOverflow = await client.eval('document.documentElement.scrollWidth > window.innerWidth')
   if (hostOverflow || clientOverflow) throw new Error(`Horizontal overflow at 320px: host=${hostOverflow}, client=${clientOverflow}`)
+
+  await host.send('Emulation.clearDeviceMetricsOverride')
+  await client.send('Emulation.clearDeviceMetricsOverride')
+  await host.eval('document.querySelector(".icon-button").click()')
+  await waitFor(() => host.eval('document.body.innerText.includes("SPIEL ERSTELLEN")'), 'host returned home for campaign story check')
+  await waitFor(() => client.eval('document.body.innerText.includes("SITZUNG VERLASSEN")'), 'client received session end')
+  await client.eval('document.querySelector(".text-button").click()')
+  await host.eval('[...document.querySelectorAll("button")].find(b => b.textContent.includes("SPIEL ERSTELLEN")).click()')
+  const campaignInvite = await waitFor(async () => {
+    const url = await host.eval('location.href')
+    return url.includes('#session=') ? url : false
+  }, 'campaign invite link')
+  await client.navigate(campaignInvite)
+  await waitFor(() => host.eval('document.body.innerText.includes("2 / 4")'), 'campaign crew connection')
+  await host.eval('[...document.querySelectorAll(".style-selector button")].find(b => b.textContent.includes("KAMPAGNE")).click()')
+  await waitFor(() => client.eval('document.querySelector(".style-selector button.selected")?.textContent.includes("KAMPAGNE")'), 'shared Campaign style')
+  await host.eval('[...document.querySelectorAll("button")].find(b => b.textContent.includes("SCHICHT STARTEN")).click()')
+  await waitFor(() => host.eval('document.querySelector(".mission-dossier .story-contact-name")?.textContent.includes("UNBEKANNTE ZUKUNFTSCREW")'), 'campaign transmission in host briefing')
+  await waitFor(() => client.eval('document.querySelector(".mission-dossier .story-contact-name")?.textContent.includes("UNBEKANNTE ZUKUNFTSCREW")'), 'campaign transmission in client briefing')
+  await host.eval('[...document.querySelectorAll("button")].find(b => b.textContent.includes("MISSION BEGINNEN")).click()')
+  await waitFor(() => host.eval('document.querySelector(".campaign-story")?.innerText.includes("WARUM DAS WICHTIG IST")'), 'operator story panel')
+  await waitFor(() => client.eval('document.querySelector(".specialist-story-shell .campaign-story")?.innerText.includes("MISSIONSFORTSCHRITT")'), 'specialist story panel')
+
+  const storyReactor = await client.eval(`(() => {
+    const panels = [...document.querySelectorAll('.manual-panel')]
+    const values = (panel) => Object.fromEntries([...panel.querySelectorAll('.data-rows > div')].map(row => [row.querySelector('span').textContent, row.querySelector('strong').textContent]))
+    const telemetry = values(panels.find(panel => panel.querySelector('h2')?.textContent === 'Reaktordaten'))
+    const dossier = values(panels.find(panel => panel.textContent.includes('Reaktor-Offset')))
+    const reading = (fragment) => Number.parseInt(Object.entries(telemetry).find(([label]) => label.includes(fragment))[1], 10)
+    return { flux: reading('Fluss'), phase: reading('Phase'), coolant: reading('Kühlmittel'), offset: +dossier['Reaktor-Offset'] }
+  })()`)
+  const storyDials = [wrap(storyReactor.flux + storyReactor.phase), wrap(storyReactor.coolant - storyReactor.phase), wrap(storyReactor.flux + storyReactor.coolant + storyReactor.offset)]
+  await host.eval(`(() => { const desired = ${JSON.stringify(storyDials)}; [...document.querySelectorAll('.dial-control')].forEach((dial, i) => { for (let n = 0; n < desired[i]; n++) dial.querySelector('button').click() }) })()`)
+  await host.eval('[...document.querySelectorAll("button")].find(b => b.textContent.includes("KALIBRIERUNG AKTIVIEREN")).click()')
+  await waitFor(() => host.eval('document.body.innerText.includes("Technisch gesehen ein Erfolg")'), 'campaign chapter win')
+  await host.eval('[...document.querySelectorAll("button")].find(b => b.textContent.includes("DESKTOP ÖFFNEN")).click()')
+  await waitFor(() => host.eval('document.querySelector(".chat-presence")?.innerText.includes("MARA VALE") && document.querySelector(".chat-message.mara")?.innerText.includes("MARA VALE")'), 'Mara visible in host story chat')
+  await waitFor(() => client.eval('document.querySelector(".chat-presence")?.innerText.includes("MARA VALE") && document.querySelector(".chat-message.mara")?.innerText.includes("MARA VALE")'), 'Mara visible in client story chat')
+  await host.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 800, deviceScaleFactor: 1, mobile: true })
+  await client.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 800, deviceScaleFactor: 1, mobile: true })
+  const storyHostOverflow = await host.eval('document.documentElement.scrollWidth > window.innerWidth')
+  const storyClientOverflow = await client.eval('document.documentElement.scrollWidth > window.innerWidth')
+  if (storyHostOverflow || storyClientOverflow) throw new Error(`Story UI horizontal overflow at 320px: host=${storyHostOverflow}, client=${storyClientOverflow}`)
   if (host.errors.length || client.errors.length) throw new Error(`Browser exceptions: ${[...host.errors, ...client.errors].join(', ')}`)
   host.close(); client.close()
-  console.log('Two-browser WebRTC smoke test passed: shared settings, varied procedures, win/replay sync, and 320px layouts.')
+  console.log('Two-browser WebRTC smoke test passed: shared settings, varied procedures, story/Mara visibility, win/replay sync, and 320px layouts.')
 } finally {
   for (const child of children.reverse()) child.kill('SIGTERM')
 }
