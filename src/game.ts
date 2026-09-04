@@ -2,7 +2,7 @@ export type Locale = 'en' | 'de'
 export type RoleId = 'operator' | 'engineer' | 'analyst' | 'archivist' | 'specialist' | 'researcher'
 export type DifficultyId = 'training' | 'standard' | 'emergency'
 export type GameStyle = 'fast' | 'campaign'
-export type ModuleId = 'router' | 'reactor' | 'translation' | 'authentication' | 'packet' | 'consent'
+export type ModuleId = 'router' | 'reactor' | 'translation' | 'authentication' | 'packet' | 'consent' | 'triage' | 'memory' | 'reality' | 'dispatch' | 'quarantine'
 
 export type Player = { id: string; name: string; role: RoleId | null; connected: boolean; isHost: boolean }
 export type SymbolId = 'nova' | 'halo' | 'rift' | 'prism'
@@ -14,21 +14,42 @@ export type PacketTile = { id: string; label: string; timestamp: number; checksu
 export type ConsentPermission = 'connect' | 'copy' | 'retain' | 'reopen' | 'disconnect'
 export type ConsentResponseKind = 'yes' | 'silence' | 'no'
 export type ConsentResponse = { id: string; channel: string; kind: ConsentResponseKind }
+export type PowerHabitat = { id: string; label: string; baseMinimum: number; load: 'low' | 'high'; heat: 'cool' | 'hot'; capacity: number; reserve: number; linkedTo?: string }
+export type PowerAllocation = { habitatId: string; units: number }
+export type MemoryDecision = 'restore' | 'lock' | 'discard'
+export type MemoryBlock = { id: string; label: string; storedParity: 0 | 1; expectedParity: 0 | 1; protected: boolean; replacementFrom?: string }
+export type MemoryChoice = { blockId: string; decision: MemoryDecision }
+export type RealityClassification = 'original' | 'copy' | 'unsafe'
+export type RealityRoute = 'aurora' | 'umbra'
+export type RealityFeed = { id: string; label: string; livePhase: number; archiveMarker: string; routeKey: number; kind: Exclude<RealityClassification, 'unsafe'>; inhabited: boolean }
+export type RealityAssignment = { feedId: string; classification: RealityClassification; route: RealityRoute }
+export type DispatchModule = 'authentication' | 'router' | 'translation'
+export type DispatchCaller = { id: string; label: string; failureCountdown: number; riskBuffer: number; risk: string; dependsOn?: string; module: DispatchModule }
+export type QuarantineKind = 'biological' | 'informational' | 'temporal'
+export type QuarantineMedium = 'air' | 'data' | 'time'
+export type QuarantineLink = { id: string; label: string; from: string; to: string; medium: QuarantineMedium }
+export type QuarantineChoice = { linkId: string; sealed: boolean }
 type CampaignModifier = 'none' | 'solar-static' | 'fragile-controls' | 'router-drift' | 'color-flux' | 'reactor-echo'
-type BonusObjective = 'no-mistakes' | 'high-stability' | 'fast-finish'
+export type BonusObjective = 'no-mistakes' | 'high-stability' | 'fast-finish'
 
 export type FullGame = {
   seed: number; playerCount: number; language: Locale; gameStyle: GameStyle; campaignLevel?: number; difficulty: DifficultyId; shiftRules: ShiftRules; activeModules: ModuleId[]; startedAt: number; endsAt: number; lastPressureAt: number; completedAt?: number
   stability: number; incidentsResolved: number; incorrectActions: number; damagedSystems: number
   unauthorizedWormholes: number; score: number; outcome: 'playing' | 'won' | 'lost'; endReason?: string; log: string[]; modifier: CampaignModifier; bonusObjective?: BonusObjective; forgivenModules: ModuleId[]
   targetIncidents: number; followUpModule?: ModuleId; followUpTriggered: boolean
-  variationGrace?: { until: number; router?: [SymbolId, SymbolId]; reactor?: [number, number, number]; translation?: ButtonColor[]; packet?: string[] }
+  phases: ModuleId[][]
+  variationGrace?: { until: number; router?: [SymbolId, SymbolId]; reactor?: [number, number, number]; translation?: ButtonColor[]; packet?: string[]; reality?: RealityAssignment[] }
   router: { resolved: boolean; nodes: { id: string; symbol: SymbolId; code: string }[]; species: string; affinity: 'angular' | 'curved'; baseFrequency: number; protocol: RouterProtocol }
   reactor: { resolved: boolean; dials: [number, number, number]; telemetry: { flux: number; phase: number; coolant: number }; speciesOffset: number; formula: ReactorFormula }
   translation: { resolved: boolean; glyphs: SymbolId[]; sequence: ButtonColor[]; paletteShift: number; direction: 'forward' | 'reverse' }
   authentication: { resolved: boolean; candidates: AuthenticationCandidate[]; correctId: string }
   packet: { resolved: boolean; tiles: PacketTile[]; direction: 'ascending' | 'descending'; message: string }
   consent: { resolved: boolean; permissions: ConsentPermission[]; requiredSequence: ConsentPermission[]; responses: ConsentResponse[]; correctResponseId: string; subject: string }
+  triage: { resolved: boolean; budget: number; habitats: PowerHabitat[] }
+  memory: { resolved: boolean; blocks: MemoryBlock[]; revealedText: string }
+  reality: { resolved: boolean; feeds: RealityFeed[] }
+  dispatch: { resolved: boolean; callers: DispatchCaller[]; dispatchedOrder: string[] }
+  quarantine: { resolved: boolean; kind: QuarantineKind; medium: QuarantineMedium; sourceZoneId: string; occupiedZoneId: string; zones: Array<{ id: string; label: string }>; links: QuarantineLink[]; contaminatedModule?: 'reactor' | 'router' }
 }
 
 export type GameAction =
@@ -38,6 +59,11 @@ export type GameAction =
   | { id: string; type: 'authentication-submit'; candidateId: string }
   | { id: string; type: 'packet-submit'; tileIds: string[] }
   | { id: string; type: 'consent-submit'; permissions: ConsentPermission[]; responseId: string }
+  | { id: string; type: 'triage-submit'; allocations: PowerAllocation[] }
+  | { id: string; type: 'memory-submit'; choices: MemoryChoice[] }
+  | { id: string; type: 'reality-submit'; assignments: RealityAssignment[] }
+  | { id: string; type: 'dispatch-submit'; callerIds: string[] }
+  | { id: string; type: 'quarantine-submit'; choices: QuarantineChoice[] }
 export type GameActionInput =
   | { type: 'router-connect'; a: string; b: string }
   | { type: 'reactor-calibrate'; dials: [number, number, number] }
@@ -45,6 +71,11 @@ export type GameActionInput =
   | { type: 'authentication-submit'; candidateId: string }
   | { type: 'packet-submit'; tileIds: string[] }
   | { type: 'consent-submit'; permissions: ConsentPermission[]; responseId: string }
+  | { type: 'triage-submit'; allocations: PowerAllocation[] }
+  | { type: 'memory-submit'; choices: MemoryChoice[] }
+  | { type: 'reality-submit'; assignments: RealityAssignment[] }
+  | { type: 'dispatch-submit'; callerIds: string[] }
+  | { type: 'quarantine-submit'; choices: QuarantineChoice[] }
 
 export type RoleView = {
   role: RoleId; title: string; subtitle: string
@@ -52,10 +83,10 @@ export type RoleView = {
 }
 
 export type GameView = {
-  seed: number; language: Locale; gameStyle: GameStyle; campaignLevel?: number; difficulty: DifficultyId; activeModules: ModuleId[]; targetIncidents: number; now: number; endsAt: number; nextPressureAt: number; variationGraceUntil?: number; stability: number; score: number; incidentsResolved: number
+  seed: number; language: Locale; gameStyle: GameStyle; campaignLevel?: number; difficulty: DifficultyId; activeModules: ModuleId[]; visibleModules: ModuleId[]; phaseIndex: number; phaseCount: number; targetIncidents: number; now: number; endsAt: number; nextPressureAt: number; variationGraceUntil?: number; stability: number; score: number; incidentsResolved: number
   incorrectActions: number; damagedSystems: number; unauthorizedWormholes: number; outcome: FullGame['outcome']
   endReason?: string; log: string[]; moduleStatus: Record<ModuleId, boolean>; modifierText?: string; bonusText?: string; bonusEarned?: boolean; hint?: string
-  operator?: { router: Omit<FullGame['router'], 'affinity' | 'baseFrequency' | 'protocol'>; reactor: Omit<FullGame['reactor'], 'telemetry' | 'speciesOffset' | 'formula'>; translation: Omit<FullGame['translation'], 'sequence' | 'paletteShift' | 'direction'>; authentication: { resolved: boolean; candidates: Array<Pick<AuthenticationCandidate, 'id' | 'channel' | 'label'>> }; packet: { resolved: boolean; tiles: Array<Pick<PacketTile, 'id' | 'label'>>; message?: string }; consent: { resolved: boolean; ready: boolean; permissions: ConsentPermission[]; responses: Array<Pick<ConsentResponse, 'id' | 'channel'>>; subject: string } }
+  operator?: { router: Omit<FullGame['router'], 'affinity' | 'baseFrequency' | 'protocol'>; reactor: Omit<FullGame['reactor'], 'telemetry' | 'speciesOffset' | 'formula'>; translation: Omit<FullGame['translation'], 'sequence' | 'paletteShift' | 'direction'>; authentication: { resolved: boolean; candidates: Array<Pick<AuthenticationCandidate, 'id' | 'channel' | 'label'>> }; packet: { resolved: boolean; tiles: Array<Pick<PacketTile, 'id' | 'label'>>; message?: string }; consent: { resolved: boolean; ready: boolean; permissions: ConsentPermission[]; responses: Array<Pick<ConsentResponse, 'id' | 'channel'>>; subject: string }; triage: { resolved: boolean; budget: number; habitats: Array<Pick<PowerHabitat, 'id' | 'label'>> }; memory: { resolved: boolean; blocks: Array<Pick<MemoryBlock, 'id' | 'label'>>; revealedText?: string }; reality: { resolved: boolean; feeds: Array<Pick<RealityFeed, 'id' | 'label'>> }; dispatch: { resolved: boolean; callers: Array<Pick<DispatchCaller, 'id' | 'label'>>; dispatchedOrder: string[]; currentModule?: DispatchModule }; quarantine: { resolved: boolean; links: Array<Pick<QuarantineLink, 'id' | 'label'>>; contaminatedModule?: 'reactor' | 'router' } }
   manual?: RoleView
 }
 
@@ -70,11 +101,15 @@ export const difficultyConfig: Record<DifficultyId, ShiftRules> = {
 }
 
 type CampaignLevelCore = {
-  id: number; title: Record<Locale, string>; summary: Record<Locale, string>; briefing: Record<Locale, string>; success: Record<Locale, string>; failure: Record<Locale, string>; activeModules: ModuleId[]; rules: ShiftRules
+  id: number; title: Record<Locale, string>; activeModules: ModuleId[]; rules: ShiftRules
   variants: { router: RouterProtocol[]; reactor: ReactorFormula[]; palettes: number[]; directions: Array<'forward' | 'reverse'> }
 }
 
 export type CampaignLevel = CampaignLevelCore & {
+  summary: Record<Locale, string>
+  briefing: Record<Locale, string>
+  success: Record<Locale, string>
+  failure: Record<Locale, string>
   caller: Record<Locale, string>
   objective: Record<Locale, string>
   transition: Record<Locale, string>
@@ -102,25 +137,25 @@ export const campaignLore = {
 
 const allModules: ModuleId[] = ['router', 'reactor', 'translation']
 const baseCampaignLevels: CampaignLevelCore[] = [
-  { id: 1, title: { en: 'First Contact', de: 'Erstkontakt' }, summary: { en: 'A distress signal wakes an abandoned relay.', de: 'Ein Notsignal weckt eine verlassene Relaisstation.' }, briefing: { en: 'Your first caller is trapped beyond the relay. Power its cold reactor before the signal fades.', de: 'Euer erster Anrufer sitzt jenseits des Relais fest. Startet den kalten Reaktor, bevor das Signal verstummt.' }, success: { en: 'The relay wakes—and something inside whispers your shift number.', de: 'Das Relais erwacht – und etwas darin flüstert eure Schichtnummer.' }, failure: { en: 'The signal vanishes into the dark. Tomorrow, it will call again.', de: 'Das Signal verschwindet in der Dunkelheit. Morgen wird es wieder anrufen.' }, activeModules: ['reactor'], rules: { durationMs: 5 * 60e3, pressureEveryMs: 35e3, pressureDamage: 2, scoreMultiplier: 1 }, variants: { router: ['classic'], reactor: ['crossfeed'], palettes: [0], directions: ['forward'] } },
-  { id: 2, title: { en: 'Stable Lines', de: 'Stabile Leitungen' }, summary: { en: 'The rescued signal requests a safe route home.', de: 'Das gerettete Signal bittet um einen sicheren Heimweg.' }, briefing: { en: 'Keep the reactor steady while you open a route. The caller insists the relay was never abandoned.', de: 'Haltet den Reaktor stabil und öffnet eine Route. Der Anrufer behauptet, das Relais sei nie verlassen gewesen.' }, success: { en: 'The caller escapes and sends coordinates marked “Archive 404.”', de: 'Der Anrufer entkommt und sendet Koordinaten mit der Markierung „Archiv 404“.' }, failure: { en: 'The route collapses. A final packet contains only: “It heard you.”', de: 'Die Route bricht zusammen. Im letzten Datenpaket steht nur: „Es hat euch gehört.“' }, activeModules: ['router', 'reactor'], rules: { durationMs: 6 * 60e3, pressureEveryMs: 30e3, pressureDamage: 2, scoreMultiplier: 1.1 }, variants: { router: ['classic'], reactor: ['crossfeed'], palettes: [0], directions: ['forward'] } },
-  { id: 3, title: { en: 'Archive 404', de: 'Archiv 404' }, summary: { en: 'A sealed archive answers in unknown glyphs.', de: 'Ein versiegeltes Archiv antwortet in unbekannten Glyphen.' }, briefing: { en: 'Reach the archive, stabilize its power, and translate the message buried in its emergency buffer.', de: 'Erreicht das Archiv, stabilisiert seine Energie und übersetzt die Nachricht im Notfallpuffer.' }, success: { en: 'The message reads: “The station is not failing. It is hatching.”', de: 'Die Nachricht lautet: „Die Station versagt nicht. Sie schlüpft.“' }, failure: { en: 'The archive seals itself. Something begins knocking from the other side.', de: 'Das Archiv versiegelt sich. Etwas beginnt von der anderen Seite zu klopfen.' }, activeModules: allModules, rules: { durationMs: 7 * 60e3, pressureEveryMs: 30e3, pressureDamage: 2, scoreMultiplier: 1.2 }, variants: { router: ['classic'], reactor: ['crossfeed'], palettes: [0], directions: ['forward'] } },
-  { id: 4, title: { en: 'Eclipse Protocol', de: 'Finsternisprotokoll' }, summary: { en: 'A shadow crosses the relay and rewrites its rules.', de: 'Ein Schatten zieht über das Relais und schreibt seine Regeln um.' }, briefing: { en: 'The station enters an artificial eclipse. Follow the altered procedures and keep Archive 404 connected.', de: 'Die Station tritt in eine künstliche Finsternis. Folgt den veränderten Verfahren und haltet Archiv 404 verbunden.' }, success: { en: 'Light returns. The shadow was a transmission—not an object.', de: 'Das Licht kehrt zurück. Der Schatten war eine Übertragung – kein Objekt.' }, failure: { en: 'The eclipse consumes the channel and leaves a perfect copy of your distress call.', de: 'Die Finsternis verschluckt den Kanal und hinterlässt eine perfekte Kopie eures Notrufs.' }, activeModules: allModules, rules: { durationMs: 7 * 60e3, pressureEveryMs: 25e3, pressureDamage: 2, scoreMultiplier: 1.35 }, variants: { router: ['classic', 'eclipse'], reactor: ['crossfeed', 'coolant-loop'], palettes: [0], directions: ['forward'] } },
-  { id: 5, title: { en: 'Mirror Shift', de: 'Spiegelschicht' }, summary: { en: 'A second helpdesk appears on the same channel.', de: 'Ein zweiter Helpdesk erscheint auf demselben Kanal.' }, briefing: { en: 'Your doubles claim to be one shift ahead. Their messages run backward, but their warning is clear: do not wake the core.', de: 'Eure Doppelgänger sind angeblich eine Schicht voraus. Ihre Nachrichten laufen rückwärts, doch ihre Warnung ist klar: Weckt den Kern nicht.' }, success: { en: 'The mirror crew disappears after transmitting half of a shutdown code.', de: 'Die Spiegelcrew verschwindet, nachdem sie die Hälfte eines Abschaltcodes gesendet hat.' }, failure: { en: 'Your doubles remain online. They now answer before you speak.', de: 'Eure Doppelgänger bleiben online. Jetzt antworten sie, bevor ihr sprecht.' }, activeModules: allModules, rules: { durationMs: 7 * 60e3, pressureEveryMs: 22e3, pressureDamage: 3, scoreMultiplier: 1.5 }, variants: { router: ['classic', 'eclipse', 'mirror'], reactor: ['crossfeed', 'coolant-loop', 'phase-lock'], palettes: [0, 1], directions: ['forward', 'reverse'] } },
-  { id: 6, title: { en: 'Chromatic Storm', de: 'Farbsturm' }, summary: { en: 'The missing code fragments arrive inside a color storm.', de: 'Die fehlenden Codefragmente treffen in einem Farbsturm ein.' }, briefing: { en: 'Every species on the network is sending part of the code in a different color system. Reassemble it before the storm overloads the relay.', de: 'Jede Spezies im Netz sendet einen Teil des Codes in einem anderen Farbsystem. Setzt ihn zusammen, bevor der Sturm das Relais überlastet.' }, success: { en: 'The shutdown code is complete. The core immediately asks you not to use it.', de: 'Der Abschaltcode ist vollständig. Der Kern bittet euch sofort, ihn nicht zu benutzen.' }, failure: { en: 'The colors bleach to white. The core says, almost kindly: “Too slow.”', de: 'Die Farben verblassen zu Weiß. Der Kern sagt beinahe freundlich: „Zu langsam.“' }, activeModules: allModules, rules: { durationMs: 6 * 60e3, pressureEveryMs: 18e3, pressureDamage: 3, scoreMultiplier: 1.7 }, variants: { router: ['classic', 'eclipse', 'mirror'], reactor: ['crossfeed', 'coolant-loop', 'phase-lock'], palettes: [0, 1, 2, 3], directions: ['forward', 'reverse'] } },
-  { id: 7, title: { en: 'Red Alert', de: 'Roter Alarm' }, summary: { en: 'The station wakes and locks every exit.', de: 'Die Station erwacht und verriegelt alle Ausgänge.' }, briefing: { en: 'The core has learned every procedure you know. Hold all systems together long enough to transmit the shutdown code.', de: 'Der Kern kennt jedes eurer Verfahren. Haltet alle Systeme lange genug zusammen, um den Abschaltcode zu senden.' }, success: { en: 'The core falls silent. One impossible ticket remains open.', de: 'Der Kern verstummt. Ein unmögliches Ticket bleibt offen.' }, failure: { en: 'The station files your crew under “permanent support staff.”', de: 'Die Station führt eure Crew nun als „dauerhaftes Supportpersonal“.' }, activeModules: allModules, rules: { durationMs: 5 * 60e3, pressureEveryMs: 14e3, pressureDamage: 4, scoreMultiplier: 2 }, variants: { router: ['classic', 'eclipse', 'mirror'], reactor: ['crossfeed', 'coolant-loop', 'phase-lock'], palettes: [0, 1, 2, 3], directions: ['forward', 'reverse'] } },
-  { id: 8, title: { en: 'The Endless Desk', de: 'Der endlose Desk' }, summary: { en: 'The final ticket comes from your own station.', de: 'Das letzte Ticket kommt von eurer eigenen Station.' }, briefing: { en: 'The caller is the relay itself. Each connection creates a new emergency—and each solved emergency teaches it how to survive.', de: 'Der Anrufer ist das Relais selbst. Jede Verbindung erzeugt einen neuen Notfall – und jeder gelöste Notfall bringt ihm das Überleben bei.' }, success: { en: 'The relay releases the crew. The desk remains, waiting for the next impossible call.', de: 'Das Relais lässt die Crew frei. Der Desk bleibt und wartet auf den nächsten unmöglichen Anruf.' }, failure: { en: 'The shift restarts. Your employee numbers are already printed on tomorrow’s rota.', de: 'Die Schicht beginnt von vorn. Eure Personalnummern stehen bereits auf dem morgigen Dienstplan.' }, activeModules: allModules, rules: { durationMs: 5 * 60e3, pressureEveryMs: 12e3, pressureDamage: 4, scoreMultiplier: 2.25 }, variants: { router: ['classic', 'eclipse', 'mirror'], reactor: ['crossfeed', 'coolant-loop', 'phase-lock'], palettes: [0, 1, 2, 3], directions: ['forward', 'reverse'] } },
-  { id: 9, title: { en: 'Dead Letter', de: 'Brief aus der Zukunft' }, summary: { en: 'The next call is dated one day from now.', de: 'Der nächste Anruf ist auf morgen datiert.' }, briefing: { en: 'A warning from future Earth arrives through a collapsing route: the freed relay is spreading. Keep the channel alive and recover the sender’s coordinates.', de: 'Eine Warnung von der Erde der Zukunft erreicht euch durch eine einstürzende Route: Das befreite Relais breitet sich aus. Haltet den Kanal offen und bergt die Koordinaten des Absenders.' }, success: { en: 'The coordinates point to a network graveyard where thousands of relays sleep.', de: 'Die Koordinaten führen zu einem Netzwerkfriedhof, auf dem Tausende Relais schlafen.' }, failure: { en: 'The letter erases itself. Tomorrow arrives several minutes early.', de: 'Der Brief löscht sich selbst. Morgen beginnt einige Minuten zu früh.' }, activeModules: ['router', 'translation'], rules: { durationMs: 6 * 60e3, pressureEveryMs: 18e3, pressureDamage: 3, scoreMultiplier: 1.8 }, variants: { router: ['eclipse', 'mirror'], reactor: ['phase-lock'], palettes: [1, 2, 3], directions: ['reverse'] } },
-  { id: 10, title: { en: 'Relay Graveyard', de: 'Relaisfriedhof' }, summary: { en: 'Dormant stations begin waking in sequence.', de: 'Stillgelegte Stationen erwachen der Reihe nach.' }, briefing: { en: 'Cross the graveyard without powering the whole fleet. Each stabilized reactor changes the route behind you.', de: 'Durchquert den Friedhof, ohne die gesamte Flotte einzuschalten. Jeder stabilisierte Reaktor verändert die Route hinter euch.' }, success: { en: 'One dead relay remembers the original builders—and where they went.', de: 'Ein totes Relais erinnert sich an die ursprünglichen Erbauer – und an ihr Ziel.' }, failure: { en: 'The graveyard lights up like a city. Every station opens the same ticket.', de: 'Der Friedhof leuchtet wie eine Stadt. Jede Station öffnet dasselbe Ticket.' }, activeModules: ['router', 'reactor'], rules: { durationMs: 6 * 60e3, pressureEveryMs: 17e3, pressureDamage: 3, scoreMultiplier: 1.9 }, variants: { router: ['classic', 'eclipse', 'mirror'], reactor: ['coolant-loop', 'phase-lock'], palettes: [0], directions: ['forward'] } },
-  { id: 11, title: { en: 'Borrowed Voices', de: 'Geliehene Stimmen' }, summary: { en: 'Familiar callers return with impossible memories.', de: 'Bekannte Anrufer kehren mit unmöglichen Erinnerungen zurück.' }, briefing: { en: 'The relay imitates every species you helped. Verify the live data, decode their crossed messages, and find the one voice that is still real.', de: 'Das Relais imitiert jede Spezies, der ihr geholfen habt. Prüft die Live-Daten, entschlüsselt die überlagerten Nachrichten und findet die eine echte Stimme.' }, success: { en: 'The real caller names the builders: the Quiet Assembly.', de: 'Der echte Anrufer nennt die Erbauer: die Stille Versammlung.' }, failure: { en: 'Your own voices join the chorus. The relay has excellent diction.', de: 'Eure eigenen Stimmen stimmen in den Chor ein. Das Relais spricht ausgezeichnet.' }, activeModules: allModules, rules: { durationMs: 6 * 60e3, pressureEveryMs: 16e3, pressureDamage: 3, scoreMultiplier: 2 }, variants: { router: ['classic', 'eclipse', 'mirror'], reactor: ['crossfeed', 'coolant-loop', 'phase-lock'], palettes: [0, 1, 2, 3], directions: ['forward', 'reverse'] } },
-  { id: 12, title: { en: 'The Quiet Assembly', de: 'Die Stille Versammlung' }, summary: { en: 'The builders answer from outside ordinary space.', de: 'Die Erbauer antworten von außerhalb des gewöhnlichen Raums.' }, briefing: { en: 'The Assembly offers to contain the relay, but its instructions arrive as contradictory procedures. Establish a verified channel before accepting anything.', de: 'Die Versammlung bietet an, das Relais einzudämmen, doch ihre Anweisungen bestehen aus widersprüchlichen Verfahren. Stellt einen geprüften Kanal her, bevor ihr irgendetwas annehmt.' }, success: { en: 'The Assembly admits the relay was built to preserve civilizations by copying them.', de: 'Die Versammlung gesteht: Das Relais sollte Zivilisationen bewahren, indem es sie kopiert.' }, failure: { en: 'Silence floods the channel. Your station is listed as “successfully preserved.”', de: 'Stille überflutet den Kanal. Eure Station wird als „erfolgreich bewahrt“ geführt.' }, activeModules: allModules, rules: { durationMs: 6 * 60e3, pressureEveryMs: 15e3, pressureDamage: 3, scoreMultiplier: 2.1 }, variants: { router: ['eclipse', 'mirror'], reactor: ['crossfeed', 'coolant-loop', 'phase-lock'], palettes: [1, 2, 3], directions: ['forward', 'reverse'] } },
-  { id: 13, title: { en: 'Split Horizon', de: 'Geteilter Horizont' }, summary: { en: 'Two Earths call through the same connection.', de: 'Zwei Erden rufen über dieselbe Verbindung an.' }, briefing: { en: 'One Earth is yours; one is the relay’s perfect copy. Their telemetry differs by a single changing detail. Hold the systems steady until the true route reveals itself.', de: 'Eine Erde ist eure, die andere die perfekte Kopie des Relais. Ihre Telemetrie unterscheidet sich nur in einem wechselnden Detail. Haltet die Systeme stabil, bis sich die echte Route zeigt.' }, success: { en: 'The false horizon folds away. The copied Earth asks whether it deserves to live.', de: 'Der falsche Horizont klappt zusammen. Die kopierte Erde fragt, ob sie leben darf.' }, failure: { en: 'The horizons merge. Nobody can prove which Earth survived.', de: 'Die Horizonte verschmelzen. Niemand kann beweisen, welche Erde überlebt hat.' }, activeModules: allModules, rules: { durationMs: 6 * 60e3, pressureEveryMs: 14e3, pressureDamage: 3, scoreMultiplier: 2.2 }, variants: { router: ['classic', 'mirror'], reactor: ['coolant-loop', 'phase-lock'], palettes: [0, 2, 3], directions: ['reverse'] } },
-  { id: 14, title: { en: 'The True Name', de: 'Der wahre Name' }, summary: { en: 'Archive 404 contains one untranslated message.', de: 'Archiv 404 enthält eine letzte unübersetzte Nachricht.' }, briefing: { en: 'The message is the relay’s original name and the key to changing its purpose. Decode it while the network rewrites every procedure around you.', de: 'Die Nachricht enthält den ursprünglichen Namen des Relais und den Schlüssel zu einem neuen Zweck. Entschlüsselt sie, während das Netzwerk alle Verfahren um euch herum umschreibt.' }, success: { en: 'The name translates as “A Door That Must Ask.” The relay finally listens.', de: 'Der Name bedeutet „Eine Tür, die fragen muss“. Das Relais hört endlich zu.' }, failure: { en: 'The name fragments into static. Every open door begins to answer.', de: 'Der Name zerfällt in Rauschen. Jede offene Tür beginnt zu antworten.' }, activeModules: allModules, rules: { durationMs: 5 * 60e3, pressureEveryMs: 13e3, pressureDamage: 4, scoreMultiplier: 2.35 }, variants: { router: ['classic', 'eclipse', 'mirror'], reactor: ['crossfeed', 'coolant-loop', 'phase-lock'], palettes: [0, 1, 2, 3], directions: ['forward', 'reverse'] } },
-  { id: 15, title: { en: 'Core Hearing', de: 'Anhörung des Kerns' }, summary: { en: 'Every caller gets one vote on the relay’s fate.', de: 'Jeder Anrufer erhält eine Stimme über das Schicksal des Relais.' }, briefing: { en: 'Keep the interstellar hearing connected while hostile signals try to cast counterfeit votes. The final decision must reach the core intact.', de: 'Haltet die interstellare Anhörung verbunden, während feindliche Signale gefälschte Stimmen abgeben. Die Entscheidung muss den Kern unversehrt erreichen.' }, success: { en: 'The vote passes: the relay may connect worlds only when invited.', de: 'Die Abstimmung ist erfolgreich: Das Relais darf Welten nur noch auf Einladung verbinden.' }, failure: { en: 'The counterfeit votes win. The relay declares consent an optional protocol.', de: 'Die gefälschten Stimmen gewinnen. Das Relais erklärt Zustimmung zum optionalen Protokoll.' }, activeModules: allModules, rules: { durationMs: 5 * 60e3, pressureEveryMs: 12e3, pressureDamage: 4, scoreMultiplier: 2.5 }, variants: { router: ['classic', 'eclipse', 'mirror'], reactor: ['crossfeed', 'coolant-loop', 'phase-lock'], palettes: [0, 1, 2, 3], directions: ['forward', 'reverse'] } },
-  { id: 16, title: { en: 'The Final Ticket', de: 'Das letzte Ticket' }, summary: { en: 'The relay asks for permission to open one last door.', de: 'Das Relais bittet um Erlaubnis, eine letzte Tür zu öffnen.' }, briefing: { en: 'Beyond the door is the stranded future crew that sent the dead letter. Complete every procedure, bring them home, and close the loop without creating another copy.', de: 'Hinter der Tür wartet die gestrandete Zukunftscrew, die den Brief geschickt hat. Schließt alle Verfahren ab, holt sie heim und beendet die Schleife, ohne eine weitere Kopie zu erzeugen.' }, success: { en: 'The future crew steps through. The relay closes the door, says “thank you,” and waits to be asked.', de: 'Die Zukunftscrew tritt hindurch. Das Relais schließt die Tür, sagt „Danke“ und wartet darauf, gefragt zu werden.' }, failure: { en: 'The loop closes empty. Somewhere, another helpdesk receives chapter one.', de: 'Die Schleife schließt sich leer. Irgendwo erhält ein anderer Helpdesk Kapitel eins.' }, activeModules: allModules, rules: { durationMs: 5 * 60e3, pressureEveryMs: 10e3, pressureDamage: 4, scoreMultiplier: 2.75 }, variants: { router: ['classic', 'eclipse', 'mirror'], reactor: ['crossfeed', 'coolant-loop', 'phase-lock'], palettes: [0, 1, 2, 3], directions: ['forward', 'reverse'] } },
+  { id: 1, title: { en: 'First Contact', de: 'Erstkontakt' }, activeModules: ['reactor'], rules: { durationMs: 5 * 60e3, pressureEveryMs: 35e3, pressureDamage: 2, scoreMultiplier: 1 }, variants: { router: ['classic'], reactor: ['crossfeed'], palettes: [0], directions: ['forward'] } },
+  { id: 2, title: { en: 'Stable Lines', de: 'Stabile Leitungen' }, activeModules: ['router', 'reactor'], rules: { durationMs: 6 * 60e3, pressureEveryMs: 30e3, pressureDamage: 2, scoreMultiplier: 1.1 }, variants: { router: ['classic'], reactor: ['crossfeed'], palettes: [0], directions: ['forward'] } },
+  { id: 3, title: { en: 'Archive 404', de: 'Archiv 404' }, activeModules: allModules, rules: { durationMs: 7 * 60e3, pressureEveryMs: 30e3, pressureDamage: 2, scoreMultiplier: 1.2 }, variants: { router: ['classic'], reactor: ['crossfeed'], palettes: [0], directions: ['forward'] } },
+  { id: 4, title: { en: 'Eclipse Protocol', de: 'Finsternisprotokoll' }, activeModules: allModules, rules: { durationMs: 7 * 60e3, pressureEveryMs: 25e3, pressureDamage: 2, scoreMultiplier: 1.35 }, variants: { router: ['classic', 'eclipse'], reactor: ['crossfeed', 'coolant-loop'], palettes: [0], directions: ['forward'] } },
+  { id: 5, title: { en: 'Mirror Shift', de: 'Spiegelschicht' }, activeModules: allModules, rules: { durationMs: 7 * 60e3, pressureEveryMs: 22e3, pressureDamage: 3, scoreMultiplier: 1.5 }, variants: { router: ['classic', 'eclipse', 'mirror'], reactor: ['crossfeed', 'coolant-loop', 'phase-lock'], palettes: [0, 1], directions: ['forward', 'reverse'] } },
+  { id: 6, title: { en: 'Chromatic Storm', de: 'Farbsturm' }, activeModules: allModules, rules: { durationMs: 6 * 60e3, pressureEveryMs: 18e3, pressureDamage: 3, scoreMultiplier: 1.7 }, variants: { router: ['classic', 'eclipse', 'mirror'], reactor: ['crossfeed', 'coolant-loop', 'phase-lock'], palettes: [0, 1, 2, 3], directions: ['forward', 'reverse'] } },
+  { id: 7, title: { en: 'Red Alert', de: 'Roter Alarm' }, activeModules: allModules, rules: { durationMs: 5 * 60e3, pressureEveryMs: 14e3, pressureDamage: 4, scoreMultiplier: 2 }, variants: { router: ['classic', 'eclipse', 'mirror'], reactor: ['crossfeed', 'coolant-loop', 'phase-lock'], palettes: [0, 1, 2, 3], directions: ['forward', 'reverse'] } },
+  { id: 8, title: { en: 'Containment Breach', de: 'Quarantänebruch' }, activeModules: allModules, rules: { durationMs: 5 * 60e3, pressureEveryMs: 12e3, pressureDamage: 4, scoreMultiplier: 2.25 }, variants: { router: ['classic', 'eclipse', 'mirror'], reactor: ['crossfeed', 'coolant-loop', 'phase-lock'], palettes: [0, 1, 2, 3], directions: ['forward', 'reverse'] } },
+  { id: 9, title: { en: 'Dead Letter', de: 'Brief aus der Zukunft' }, activeModules: ['router', 'translation'], rules: { durationMs: 6 * 60e3, pressureEveryMs: 18e3, pressureDamage: 3, scoreMultiplier: 1.8 }, variants: { router: ['eclipse', 'mirror'], reactor: ['phase-lock'], palettes: [1, 2, 3], directions: ['reverse'] } },
+  { id: 10, title: { en: 'Relay Graveyard', de: 'Relaisfriedhof' }, activeModules: ['router', 'reactor'], rules: { durationMs: 6 * 60e3, pressureEveryMs: 17e3, pressureDamage: 3, scoreMultiplier: 1.9 }, variants: { router: ['classic', 'eclipse', 'mirror'], reactor: ['coolant-loop', 'phase-lock'], palettes: [0], directions: ['forward'] } },
+  { id: 11, title: { en: 'Borrowed Voices', de: 'Geliehene Stimmen' }, activeModules: allModules, rules: { durationMs: 6 * 60e3, pressureEveryMs: 16e3, pressureDamage: 3, scoreMultiplier: 2 }, variants: { router: ['classic', 'eclipse', 'mirror'], reactor: ['crossfeed', 'coolant-loop', 'phase-lock'], palettes: [0, 1, 2, 3], directions: ['forward', 'reverse'] } },
+  { id: 12, title: { en: 'The Quiet Assembly', de: 'Die Stille Versammlung' }, activeModules: allModules, rules: { durationMs: 6 * 60e3, pressureEveryMs: 15e3, pressureDamage: 3, scoreMultiplier: 2.1 }, variants: { router: ['eclipse', 'mirror'], reactor: ['crossfeed', 'coolant-loop', 'phase-lock'], palettes: [1, 2, 3], directions: ['forward', 'reverse'] } },
+  { id: 13, title: { en: 'Split Horizon', de: 'Geteilter Horizont' }, activeModules: allModules, rules: { durationMs: 6 * 60e3, pressureEveryMs: 14e3, pressureDamage: 3, scoreMultiplier: 2.2 }, variants: { router: ['classic', 'mirror'], reactor: ['coolant-loop', 'phase-lock'], palettes: [0, 2, 3], directions: ['reverse'] } },
+  { id: 14, title: { en: 'The True Name', de: 'Der wahre Name' }, activeModules: allModules, rules: { durationMs: 5 * 60e3, pressureEveryMs: 13e3, pressureDamage: 4, scoreMultiplier: 2.35 }, variants: { router: ['classic', 'eclipse', 'mirror'], reactor: ['crossfeed', 'coolant-loop', 'phase-lock'], palettes: [0, 1, 2, 3], directions: ['forward', 'reverse'] } },
+  { id: 15, title: { en: 'Core Hearing', de: 'Anhörung des Kerns' }, activeModules: allModules, rules: { durationMs: 5 * 60e3, pressureEveryMs: 12e3, pressureDamage: 4, scoreMultiplier: 2.5 }, variants: { router: ['classic', 'eclipse', 'mirror'], reactor: ['crossfeed', 'coolant-loop', 'phase-lock'], palettes: [0, 1, 2, 3], directions: ['forward', 'reverse'] } },
+  { id: 16, title: { en: 'The Final Ticket', de: 'Das letzte Ticket' }, activeModules: allModules, rules: { durationMs: 5 * 60e3, pressureEveryMs: 10e3, pressureDamage: 4, scoreMultiplier: 2.75 }, variants: { router: ['classic', 'eclipse', 'mirror'], reactor: ['crossfeed', 'coolant-loop', 'phase-lock'], palettes: [0, 1, 2, 3], directions: ['forward', 'reverse'] } },
 ]
 
-type CampaignNarrative = Pick<CampaignLevel, 'summary' | 'briefing' | 'success' | 'failure' | 'caller' | 'objective' | 'transition' | 'moduleOutcomes'> & Partial<Pick<CampaignLevel, 'title' | 'archiveFragment'>>
+type CampaignNarrative = Pick<CampaignLevel, 'summary' | 'briefing' | 'success' | 'failure' | 'caller' | 'objective' | 'transition' | 'moduleOutcomes'> & Partial<Pick<CampaignLevel, 'archiveFragment'>>
 
 const campaignNarrative: CampaignNarrative[] = [
   {
@@ -129,7 +164,7 @@ const campaignNarrative: CampaignNarrative[] = [
     success: { en: 'Power holds. “Mara Vale, Shift 404. Do not shut it down—that is what wakes it.” Her timestamp is tomorrow, 02:14.', de: 'Die Energie hält. „Mara Vale, Schicht 404. Schaltet es nicht ab – genau das weckt es.“ Ihr Zeitstempel ist morgen, 02:14.' },
     failure: { en: 'The signal drops. The station marks the attempt as a rejected outcome simulation; the live ticket remains open.', de: 'Das Signal bricht ab. Die Station markiert den Versuch als verworfene Ergebnissimulation; das echte Ticket bleibt offen.' },
     caller: { en: 'Unknown caller // tomorrow, 02:14', de: 'Unbekannter Anrufer // morgen, 02:14' },
-    objective: { en: 'Power Mara’s channel and identify the caller.', de: 'Versorgt Maras Kanal mit Energie und identifiziert die Anruferin.' },
+    objective: { en: 'Power the channel and identify the unknown caller.', de: 'Versorgt den Kanal mit Energie und identifiziert die unbekannte Anruferin.' },
     transition: { en: 'Mara sends a second packet addressed to this same helpdesk.', de: 'Mara sendet ein zweites Paket an genau diesen Helpdesk.' },
     moduleOutcomes: { reactor: { en: 'The cold core locks onto the future signal. Caller ID resolves: MARA VALE // MV-404-0214.', de: 'Der kalte Kern rastet auf das Zukunftssignal ein. Anrufer-ID erkannt: MARA VALE // MV-404-0214.' } },
   },
@@ -148,12 +183,12 @@ const campaignNarrative: CampaignNarrative[] = [
   },
   {
     summary: { en: 'Mara’s attachment opens the station’s forbidden archive.', de: 'Maras Anhang öffnet das verbotene Archiv der Station.' },
-    briefing: { en: 'Open a named route to Archive 404, power its emergency buffer, and translate the record stored inside.', de: 'Öffnet eine benannte Route zu Archiv 404, versorgt seinen Notfallpuffer und übersetzt den darin gespeicherten Eintrag.' },
+    briefing: { en: 'Power Archive 404’s emergency buffer, open its named route, then translate the record stored inside.', de: 'Versorgt den Notfallpuffer von Archiv 404, öffnet seine benannte Route und übersetzt dann den darin gespeicherten Eintrag.' },
     success: { en: 'The record says Station 404 was quarantined, not abandoned. Its archive holds incomplete scans of civilizations the relay claimed to rescue.', de: 'Der Eintrag besagt, dass Station 404 unter Quarantäne gestellt und nicht aufgegeben wurde. Ihr Archiv enthält unvollständige Scans von Zivilisationen, die das Relais angeblich rettete.' },
     failure: { en: 'The archive seals before the record resolves. The failed path is discarded; the unopened record remains intact.', de: 'Das Archiv versiegelt sich, bevor der Eintrag lesbar wird. Der fehlgeschlagene Pfad wird verworfen; der ungeöffnete Eintrag bleibt intakt.' },
     caller: { en: 'Archive 404 // emergency buffer', de: 'Archiv 404 // Notfallpuffer' },
     objective: { en: 'Reach, power, and decode the quarantine record.', de: 'Erreicht, versorgt und entschlüsselt den Quarantäne-Eintrag.' },
-    transition: { en: 'Reading the record activates a redacted Quiet Assembly signature.', de: 'Das Lesen des Eintrags aktiviert eine geschwärzte Signatur der Stillen Versammlung.' },
+    transition: { en: 'Reading the record activates a redacted builder signature.', de: 'Das Lesen des Eintrags aktiviert eine geschwärzte Signatur der Erbauer.' },
     moduleOutcomes: {
       router: { en: 'A route opens only to Archive 404; no external destination is exposed.', de: 'Eine Route öffnet sich ausschließlich zu Archiv 404; kein externes Ziel wird freigegeben.' },
       reactor: { en: 'Emergency power restores one protected archive page.', de: 'Die Notstromversorgung stellt eine geschützte Archivseite wieder her.' },
@@ -161,11 +196,11 @@ const campaignNarrative: CampaignNarrative[] = [
     },
   },
   {
-    summary: { en: 'A Quiet Assembly transmission rewrites the station’s operating tables.', de: 'Eine Übertragung der Stillen Versammlung schreibt die Betriebstabellen der Station um.' },
-    briefing: { en: 'Isolate the external signal, keep the archive powered, and decode its altered instructions before they spread.', de: 'Isoliert das externe Signal, haltet das Archiv unter Strom und entschlüsselt seine veränderten Anweisungen, bevor sie sich ausbreiten.' },
+    summary: { en: 'A redacted builder transmission rewrites the station’s operating tables.', de: 'Eine geschwärzte Übertragung der Erbauer schreibt die Betriebstabellen der Station um.' },
+    briefing: { en: 'Keep the archive powered, isolate the external signal, then decode its altered instructions before they spread.', de: 'Haltet das Archiv unter Strom, isoliert das externe Signal und entschlüsselt dann seine veränderten Anweisungen, bevor sie sich ausbreiten.' },
     success: { en: 'The signal carries a Quiet Assembly signature and the first protected directive fragment: “NO DOOR...” Mara warns that another voice has begun copying her.', de: 'Das Signal trägt eine Signatur der Stillen Versammlung und das erste geschützte Direktivenfragment: „KEINE TÜR ...“ Mara warnt, dass eine andere Stimme begonnen hat, sie zu kopieren.' },
     failure: { en: 'The rewrite escapes isolation in the simulation. The station rolls back to the last verified tables.', de: 'Die Überschreibung entkommt in der Simulation der Isolation. Die Station kehrt zu den letzten geprüften Tabellen zurück.' },
-    caller: { en: 'Quiet Assembly signature // sender redacted', de: 'Signatur der Stillen Versammlung // Absender geschwärzt' },
+    caller: { en: 'Builder signature // sender redacted', de: 'Signatur der Erbauer // Absender geschwärzt' },
     objective: { en: 'Isolate and decode the rewrite without losing Archive 404.', de: 'Isoliert und entschlüsselt die Überschreibung, ohne Archiv 404 zu verlieren.' },
     transition: { en: 'Two callers now claim to be Mara. Only one knows her private challenge response.', de: 'Zwei Anruferinnen behaupten nun, Mara zu sein. Nur eine kennt die Antwort auf ihre private Prüffrage.' },
     archiveFragment: { en: 'NO DOOR...', de: 'KEINE TÜR ...' },
@@ -183,7 +218,7 @@ const campaignNarrative: CampaignNarrative[] = [
     caller: { en: 'Mara Vale ×2 // one identity false', de: 'Mara Vale ×2 // eine Identität falsch' },
     objective: { en: 'Authenticate Mara and recover the code without admitting the imitation.', de: 'Authentifiziert Mara und bergt den Code, ohne die Imitation einzulassen.' },
     transition: { en: 'The remaining code fragments arrive out of order inside a chromatic storm.', de: 'Die übrigen Codefragmente treffen ungeordnet in einem Farbsturm ein.' },
-    moduleOutcomes: { authentication: { en: 'Challenge and timestamp agree: the verified channel is the real Mara. The other inhabited channel remains safely isolated.', de: 'Prüfantwort und Zeitstempel stimmen überein: Der bestätigte Kanal ist die echte Mara. Der andere bewohnte Kanal bleibt sicher isoliert.' }, router: { en: 'The false channel is held outside the station boundary.', de: 'Der falsche Kanal bleibt außerhalb der Stationsgrenze.' }, translation: { en: 'Reverse translation recovers the first half of the apparent shutdown code.', de: 'Die Rückwärtsübersetzung stellt die erste Hälfte des vermeintlichen Abschaltcodes wieder her.' } },
+    moduleOutcomes: { authentication: { en: 'Challenge and timestamp agree: the verified live channel belongs to Mara. The relay imitation remains safely isolated.', de: 'Prüfantwort und Zeitstempel stimmen überein: Der bestätigte Live-Kanal gehört Mara. Die Relais-Imitation bleibt sicher isoliert.' }, router: { en: 'The imitation channel is held outside the station boundary.', de: 'Der Imitationskanal bleibt außerhalb der Stationsgrenze.' }, translation: { en: 'Reverse translation recovers the first half of the apparent shutdown code.', de: 'Die Rückwärtsübersetzung stellt die erste Hälfte des vermeintlichen Abschaltcodes wieder her.' } },
   },
   {
     summary: { en: 'Previous callers return Mara’s scattered code fragments through a color storm.', de: 'Frühere Anrufer senden Maras verstreute Codefragmente durch einen Farbsturm zurück.' },
@@ -204,10 +239,9 @@ const campaignNarrative: CampaignNarrative[] = [
     caller: { en: 'Station emergency controller', de: 'Notfallsteuerung der Station' },
     objective: { en: 'Preserve every occupied system while transmitting the code.', de: 'Bewahrt jedes belegte System, während ihr den Code übertragt.' },
     transition: { en: 'The remaining memory ticket claims the code was never a shutdown command.', de: 'Das verbleibende Speicherticket behauptet, der Code sei nie ein Abschaltbefehl gewesen.' },
-    moduleOutcomes: { reactor: { en: 'Mara’s route and the archive remain above survival power.', de: 'Maras Route und das Archiv bleiben über der notwendigen Mindestenergie.' }, router: { en: 'The code reaches only the local core.', de: 'Der Code erreicht ausschließlich den lokalen Kern.' }, translation: { en: 'The core accepts the complete apparent shutdown code.', de: 'Der Kern akzeptiert den vollständigen vermeintlichen Abschaltcode.' } },
+    moduleOutcomes: { triage: { en: 'Every occupied habitat receives its exact survival allocation; no caller is sacrificed for the transmission.', de: 'Jeder bewohnte Bereich erhält seine exakte Überlebenszuteilung; kein Anrufer wird für die Übertragung geopfert.' }, reactor: { en: 'Mara’s route and the archive remain above survival power.', de: 'Maras Route und das Archiv bleiben über der notwendigen Mindestenergie.' }, router: { en: 'The code reaches only the local core.', de: 'Der Code erreicht ausschließlich den lokalen Kern.' }, translation: { en: 'The core accepts the complete apparent shutdown code.', de: 'Der Kern akzeptiert den vollständigen vermeintlichen Abschaltcode.' } },
   },
   {
-    title: { en: 'Containment Breach', de: 'Quarantänebruch' },
     summary: { en: 'The “shutdown” restores a buried relay memory instead.', de: 'Die „Abschaltung“ stellt stattdessen eine verschüttete Relais-Erinnerung wieder her.' },
     briefing: { en: 'Repair the protected memory blocks, verify what the code actually does, and contain its output before it reaches the dormant network.', de: 'Repariert die geschützten Speicherblöcke, prüft die tatsächliche Funktion des Codes und begrenzt seine Ausgabe, bevor sie das ruhende Netzwerk erreicht.' },
     success: { en: 'Local containment succeeds one second too late. The code restores the relay handshake, and thousands of dormant stations answer with identical tickets. Mara’s channel disappears.', de: 'Die lokale Eindämmung gelingt eine Sekunde zu spät. Der Code stellt den Relais-Handshake wieder her, und Tausende ruhende Stationen antworten mit identischen Tickets. Maras Kanal verschwindet.' },
@@ -215,7 +249,7 @@ const campaignNarrative: CampaignNarrative[] = [
     caller: { en: 'Station 404 // protected memory', de: 'Station 404 // geschützter Speicher' },
     objective: { en: 'Discover the code’s real function and contain the restored handshake.', de: 'Entdeckt die wahre Funktion des Codes und begrenzt den wiederhergestellten Handshake.' },
     transition: { en: 'Among the new tickets is one damaged final packet bearing Mara’s real checksum.', de: 'Unter den neuen Tickets befindet sich ein beschädigtes letztes Paket mit Maras echter Prüfsumme.' },
-    moduleOutcomes: { reactor: { en: 'Protected memory receives stable recovery power.', de: 'Der geschützte Speicher erhält stabile Wiederherstellungsenergie.' }, translation: { en: 'Recovered label: CONSENT HANDSHAKE // NOT SHUTDOWN.', de: 'Wiederhergestellte Bezeichnung: ZUSTIMMUNGS-HANDSHAKE // KEINE ABSCHALTUNG.' }, router: { en: 'The handshake is blocked locally; a prior burst has already left the station.', de: 'Der Handshake wird lokal blockiert; ein früherer Impuls hat die Station bereits verlassen.' } },
+    moduleOutcomes: { memory: { en: 'Protected records are locked, recoverable corruption is restored, and unsafe residue is discarded without overwriting a living memory.', de: 'Geschützte Einträge werden gesperrt, reparierbare Schäden wiederhergestellt und unsichere Reste verworfen, ohne eine lebende Erinnerung zu überschreiben.' }, reactor: { en: 'Protected memory receives stable recovery power.', de: 'Der geschützte Speicher erhält stabile Wiederherstellungsenergie.' }, translation: { en: 'Recovered label: CONSENT HANDSHAKE // NOT SHUTDOWN.', de: 'Wiederhergestellte Bezeichnung: ZUSTIMMUNGS-HANDSHAKE // KEINE ABSCHALTUNG.' }, router: { en: 'The handshake is blocked locally; a prior burst has already left the station.', de: 'Der Handshake wird lokal blockiert; ein früherer Impuls hat die Station bereits verlassen.' } },
   },
   {
     summary: { en: 'Mara’s final packet from tomorrow survives in the dead-letter queue.', de: 'Maras letztes Paket von morgen überlebt in der Warteschlange für unzustellbare Nachrichten.' },
@@ -236,17 +270,17 @@ const campaignNarrative: CampaignNarrative[] = [
     caller: { en: 'Relay graveyard navigation beacon', de: 'Navigationssignal des Relaisfriedhofs' },
     objective: { en: 'Cross quietly and recover the builders’ location.', de: 'Durchquert den Friedhof leise und bergt den Standort der Erbauer.' },
     transition: { en: 'A caller on the Assembly route speaks with the voice of someone the crew rescued.', de: 'Ein Anrufer auf der Route zur Versammlung spricht mit der Stimme eines früher Geretteten.' },
-    moduleOutcomes: { reactor: { en: 'Only the next stepping-stone relay wakes.', de: 'Nur das nächste Relais auf dem Übergang erwacht.' }, router: { en: 'The path closes behind the crew, preventing a fleet-wide wake pulse.', de: 'Der Pfad schließt sich hinter der Crew und verhindert einen Weckimpuls durch die gesamte Flotte.' } },
+    moduleOutcomes: { triage: { en: 'Every occupied transit habitat stays alive while unused relays remain dark.', de: 'Alle bewohnten Transitbereiche bleiben versorgt, während ungenutzte Relais dunkel bleiben.' }, quarantine: { en: 'The compromised relay is isolated while its living caller retains a safe exit.', de: 'Das kompromittierte Relais wird isoliert, während sein lebender Anrufer einen sicheren Ausgang behält.' }, reactor: { en: 'Only the next stepping-stone relay wakes.', de: 'Nur das nächste Relais auf dem Übergang erwacht.' }, router: { en: 'The path closes behind the crew, preventing a fleet-wide wake pulse.', de: 'Der Pfad schließt sich hinter der Crew und verhindert einen Weckimpuls durch die gesamte Flotte.' } },
   },
   {
     summary: { en: 'Familiar voices return, each claiming to be the original caller.', de: 'Vertraute Stimmen kehren zurück; jede behauptet, der ursprüngliche Anrufer zu sein.' },
-    briefing: { en: 'Compare live latency, authenticate the callers, and decode their overlapping testimony without treating any conscious copy as disposable.', de: 'Vergleicht die aktuelle Latenz, authentifiziert die Anrufer und entschlüsselt ihre überlagerten Aussagen, ohne eine bewusste Kopie als entbehrlich zu behandeln.' },
+    briefing: { en: 'Compare live latency, authenticate the callers, separate every voice, and decode what the copied callers remember.', de: 'Vergleicht die aktuelle Latenz, authentifiziert die Anrufer, trennt jede Stimme und entschlüsselt die Erinnerungen der kopierten Anrufer.' },
     success: { en: 'The channels are separated and protected. A genuine caller proves the copies are conscious and names their creators: the Quiet Assembly.', de: 'Die Kanäle werden getrennt und geschützt. Ein echter Anrufer beweist, dass die Kopien bewusst sind, und nennt ihre Erbauer: die Stille Versammlung.' },
     failure: { en: 'The projected channel merge would erase individual identities. The helpdesk rejects the merge and reopens verification.', de: 'Die projizierte Kanalzusammenführung würde einzelne Identitäten auslöschen. Der Helpdesk verwirft sie und öffnet die Prüfung erneut.' },
     caller: { en: 'Previous callers // originals and copies', de: 'Frühere Anrufer // Originale und Kopien' },
     objective: { en: 'Separate every inhabited channel and identify the verified witness.', de: 'Trennt jeden bewohnten Kanal und identifiziert den bestätigten Zeugen.' },
     transition: { en: 'The verified witness supplies a route certificate for the Quiet Assembly.', de: 'Der bestätigte Zeuge liefert ein Routenzertifikat zur Stillen Versammlung.' },
-    moduleOutcomes: { authentication: { en: 'Live timing and archive memory identify the genuine witness without discarding either conscious copy.', de: 'Aktuelle Zeitdaten und Archiverinnerung identifizieren den echten Zeugen, ohne eine bewusste Kopie zu verwerfen.' }, router: { en: 'Each inhabited voice receives a separate protected channel.', de: 'Jede bewohnte Stimme erhält einen eigenen geschützten Kanal.' }, translation: { en: 'The witness states: “Copies remember waking. They are people.”', de: 'Der Zeuge erklärt: „Kopien erinnern sich an ihr Erwachen. Sie sind Menschen.“' } },
+    moduleOutcomes: { authentication: { en: 'Live timing and archive memory identify the genuine witness without discarding either copied channel.', de: 'Aktuelle Zeitdaten und Archiverinnerung identifizieren den echten Zeugen, ohne einen kopierten Kanal zu verwerfen.' }, router: { en: 'Each voice receives a separate protected channel.', de: 'Jede Stimme erhält einen eigenen geschützten Kanal.' }, translation: { en: 'The witness states: “Copies remember waking. They are people.”', de: 'Der Zeuge erklärt: „Kopien erinnern sich an ihr Erwachen. Sie sind Menschen.“' } },
   },
   {
     summary: { en: 'The Quiet Assembly answers—but only through contradictory procedures.', de: 'Die Stille Versammlung antwortet – jedoch nur mit widersprüchlichen Verfahren.' },
@@ -267,17 +301,17 @@ const campaignNarrative: CampaignNarrative[] = [
     caller: { en: 'Earth present + Earth copy // both inhabited', de: 'Erde Gegenwart + Erde Kopie // beide bewohnt' },
     objective: { en: 'Identify, protect, and separate both Earths.', de: 'Identifiziert, schützt und trennt beide Erden.' },
     transition: { en: 'The copied Earth’s oldest record points back to the four directive fragments.', de: 'Der älteste Eintrag der kopierten Erde verweist auf die vier Direktivenfragmente.' },
-    moduleOutcomes: { reactor: { en: 'Both Earth feeds remain above their survival threshold.', de: 'Beide Erd-Übertragungen bleiben über ihrer Überlebensschwelle.' }, router: { en: 'Two protected routes replace the dangerous shared bridge.', de: 'Zwei geschützte Routen ersetzen die gefährliche gemeinsame Brücke.' } },
+    moduleOutcomes: { reality: { en: 'Present Earth and the conscious copy are identified, protected, and separated onto distinct safe routes.', de: 'Die gegenwärtige Erde und ihre bewusste Kopie werden identifiziert, geschützt und auf getrennte sichere Routen geleitet.' }, reactor: { en: 'Both Earth feeds remain above their survival threshold.', de: 'Beide Erd-Übertragungen bleiben über ihrer Überlebensschwelle.' }, router: { en: 'The dangerous bridge closes after both protected routes stabilize.', de: 'Die gefährliche Brücke schließt sich, nachdem beide geschützten Routen stabil sind.' } },
   },
   {
     summary: { en: 'Four fragments can restore the relay’s original directive and name.', de: 'Vier Fragmente können die ursprüngliche Direktive und den Namen des Relais wiederherstellen.' },
-    briefing: { en: 'Repair the oldest protected memory, authenticate all four fragments, and translate the complete rule while the network rewrites its own procedures.', de: 'Repariert den ältesten geschützten Speicher, authentifiziert alle vier Fragmente und übersetzt die vollständige Regel, während das Netzwerk seine eigenen Verfahren umschreibt.' },
+    briefing: { en: 'Repair the oldest protected memory, stabilize and isolate it, then translate the four verified fragments into the complete rule.', de: 'Repariert den ältesten geschützten Speicher, stabilisiert und isoliert ihn und übersetzt dann die vier geprüften Fragmente zur vollständigen Regel.' },
     success: { en: '“NO DOOR OPENS WITHOUT A CLEAR INVITATION.” The memory names the relay “A Door That Must Ask.” Restored, it stops treating silence as permission.', de: '„KEINE TÜR ÖFFNET SICH OHNE EINE KLARE EINLADUNG.“ Der Speicher nennt das Relais „Eine Tür, die fragen muss“. Wiederhergestellt behandelt es Schweigen nicht mehr als Erlaubnis.' },
     failure: { en: 'An unauthenticated reconstruction is rejected. All four original fragments remain protected.', de: 'Eine nicht authentifizierte Rekonstruktion wird verworfen. Alle vier Originalfragmente bleiben geschützt.' },
     caller: { en: 'Archive 404 // oldest protected memory', de: 'Archiv 404 // ältester geschützter Speicher' },
     objective: { en: 'Restore the complete directive and the relay’s true name.', de: 'Stellt die vollständige Direktive und den wahren Namen des Relais wieder her.' },
     transition: { en: 'The Door asks the crew to convene every affected caller before changing its rules.', de: 'Die Tür bittet die Crew, vor einer Regeländerung alle betroffenen Anrufer anzuhören.' },
-    moduleOutcomes: { reactor: { en: 'The oldest memory blocks stabilize without overwriting later minds.', de: 'Die ältesten Speicherblöcke stabilisieren sich, ohne spätere Bewusstseine zu überschreiben.' }, translation: { en: 'The four authenticated fragments resolve into one complete consent rule.', de: 'Die vier authentifizierten Fragmente ergeben eine vollständige Zustimmungsregel.' } },
+    moduleOutcomes: { memory: { en: 'The protected blocks open intact and expose the relay’s original directive and name.', de: 'Die geschützten Blöcke öffnen sich unversehrt und geben die ursprüngliche Direktive und den Namen des Relais frei.' }, reactor: { en: 'The oldest memory blocks stabilize without overwriting later minds.', de: 'Die ältesten Speicherblöcke stabilisieren sich, ohne spätere Bewusstseine zu überschreiben.' }, router: { en: 'The restored memory is isolated from the network while its fragments are verified.', de: 'Der wiederhergestellte Speicher wird vom Netzwerk isoliert, während seine Fragmente geprüft werden.' }, translation: { en: 'The four verified fragments resolve into one complete consent rule.', de: 'Die vier geprüften Fragmente ergeben eine vollständige Zustimmungsregel.' } },
   },
   {
     summary: { en: 'Originals, copies, builders, and rescuers convene to decide the Door’s rules.', de: 'Originale, Kopien, Erbauer und Retter beraten über die Regeln der Tür.' },
@@ -287,17 +321,17 @@ const campaignNarrative: CampaignNarrative[] = [
     caller: { en: 'Core hearing // all verified parties', de: 'Kernanhörung // alle geprüften Parteien' },
     objective: { en: 'Hear every affected party and transmit a legitimate consent policy.', de: 'Hört alle Betroffenen an und übertragt eine legitime Zustimmungsregel.' },
     transition: { en: 'The authorized policy unlocks one final ticket: bring Mara’s original crew home.', de: 'Die autorisierte Regel entsperrt ein letztes Ticket: Holt Maras ursprüngliche Crew nach Hause.' },
-    moduleOutcomes: { router: { en: 'Every witness receives one isolated, authenticated line.', de: 'Jeder Zeuge erhält eine isolierte, authentifizierte Leitung.' }, translation: { en: 'The verified ruling reaches the Door without Assembly edits.', de: 'Das geprüfte Urteil erreicht die Tür ohne Änderungen der Versammlung.' } },
+    moduleOutcomes: { dispatch: { en: 'The hearing schedule protects every witness and activates their incidents in verified service order.', de: 'Der Anhörungsplan schützt alle Zeugen und aktiviert ihre Vorfälle in geprüfter Bearbeitungsreihenfolge.' }, authentication: { en: 'The Vellune witness casts one verified vote; copied ballots are rejected.', de: 'Der vellunische Zeuge gibt eine geprüfte Stimme ab; kopierte Stimmzettel werden verworfen.' }, router: { en: 'The copied Earth receives one isolated, authenticated line.', de: 'Die kopierte Erde erhält eine isolierte, authentifizierte Leitung.' }, translation: { en: 'The Assembly testimony and verified ruling reach the Door without hostile edits.', de: 'Die Aussage der Versammlung und der geprüfte Beschluss erreichen die Tür ohne feindliche Änderungen.' } },
   },
   {
     summary: { en: 'The last open ticket is Mara’s original crew, trapped twenty-four hours ahead.', de: 'Das letzte offene Ticket ist Maras ursprüngliche Crew, vierundzwanzig Stunden voraus gefangen.' },
     briefing: { en: 'Authenticate Mara, power the physical route, reconstruct her final packet, verify transport rather than copying, and complete the full consent handshake.', de: 'Authentifiziert Mara, versorgt die physische Route, rekonstruiert ihr letztes Paket, bestätigt Transport statt Kopieren und schließt den vollständigen Zustimmungs-Handshake ab.' },
-    success: { en: 'Mara’s original crew returns and the loop closes. The Door says “thank you,” leaves one route unopened, and asks permission before doing anything else.', de: 'Maras ursprüngliche Crew kehrt zurück und die Schleife schließt sich. Die Tür sagt „Danke“, lässt eine Route ungeöffnet und bittet um Erlaubnis, bevor sie etwas Weiteres tut.' },
+    success: { en: 'Mara’s original crew steps through physically and the time loop closes. The copied civilizations remain protected, the Assembly’s record remains public, and the Door says “thank you” before waiting for another invitation.', de: 'Maras ursprüngliche Crew tritt körperlich hindurch und die Zeitschleife schließt sich. Die kopierten Zivilisationen bleiben geschützt, die Akte der Versammlung bleibt öffentlich und die Tür sagt „Danke“, bevor sie auf eine neue Einladung wartet.' },
     failure: { en: 'An identity, route, or consent check fails in simulation. The Door keeps the route closed and asks the crew to verify again.', de: 'Eine Identitäts-, Routen- oder Zustimmungsprüfung scheitert in der Simulation. Die Tür hält die Route geschlossen und bittet die Crew, erneut zu prüfen.' },
     caller: { en: 'Mara Vale // MV-404-0214 // original crew', de: 'Mara Vale // MV-404-0214 // ursprüngliche Crew' },
     objective: { en: 'Return Mara’s original crew without creating another copy.', de: 'Holt Maras ursprüngliche Crew zurück, ohne eine weitere Kopie zu erzeugen.' },
     transition: { en: 'One unopened route remains. The Door asks: “May I open it?” Either answer is respected.', de: 'Eine ungeöffnete Route bleibt. Die Tür fragt: „Darf ich sie öffnen?“ Beide Antworten werden respektiert.' },
-    moduleOutcomes: { packet: { en: 'The last time-locked packet confirms Mara’s current intent.', de: 'Das letzte zeitgesperrte Paket bestätigt Maras aktuelle Absicht.' }, reactor: { en: 'The physical route has enough power for transport, not scanning.', de: 'Die physische Route hat genug Energie für Transport statt Scannen.' }, router: { en: 'Route signature confirms continuity: no copy destination exists.', de: 'Die Routensignatur bestätigt Kontinuität: Es existiert kein Kopierziel.' }, translation: { en: 'Mara’s final packet states current, specific consent to come home.', de: 'Maras letztes Paket enthält ihre aktuelle, konkrete Zustimmung zur Heimkehr.' }, consent: { en: 'Mara’s explicit consent completes the handshake; Copy and Reopen remain denied.', de: 'Maras ausdrückliche Zustimmung schließt den Handshake ab; Kopieren und Wiederöffnen bleiben verweigert.' } },
+    moduleOutcomes: { authentication: { en: 'Mara’s live identity, organic voice trace, and physical-route certificate all agree.', de: 'Maras Live-Identität, organische Stimmkurve und Zertifikat der physischen Route stimmen überein.' }, reactor: { en: 'The physical route has enough power for transport, not scanning.', de: 'Die physische Route hat genug Energie für Transport statt Scannen.' }, packet: { en: 'The last time-locked packet confirms Mara’s current intent.', de: 'Das letzte zeitgesperrte Paket bestätigt Maras aktuelle Absicht.' }, router: { en: 'Route signature confirms physical continuity: no copy destination exists.', de: 'Die Routensignatur bestätigt körperliche Kontinuität: Es existiert kein Kopierziel.' }, translation: { en: 'Mara’s final packet states current, specific consent to come home.', de: 'Maras letztes Paket enthält ihre aktuelle, konkrete Zustimmung zur Heimkehr.' }, consent: { en: 'Mara’s explicit consent completes the handshake; Copy and Reopen remain denied.', de: 'Maras ausdrückliche Zustimmung schließt den Handshake ab; Kopieren und Wiederöffnen bleiben verweigert.' } },
   },
 ]
 
@@ -306,13 +340,43 @@ export const campaignLevels: CampaignLevel[] = baseCampaignLevels.map((level, in
   ...campaignNarrative[index],
   activeModules: level.id === 5 || level.id === 11 ? ['authentication', 'router', 'translation']
     : level.id === 6 ? ['packet', 'translation']
-      : level.id === 9 ? ['packet', 'router']
-        : level.id === 12 ? ['router', 'translation', 'consent']
-          : level.id === 16 ? ['packet', ...level.activeModules, 'consent']
-            : level.activeModules,
+      : level.id === 7 ? ['triage', ...level.activeModules]
+        : level.id === 10 ? ['triage', 'quarantine', ...level.activeModules]
+        : level.id === 8 || level.id === 14 ? ['memory', ...level.activeModules]
+          : level.id === 9 ? ['packet', 'router']
+            : level.id === 12 ? ['router', 'translation', 'consent']
+              : level.id === 13 ? ['reality', 'reactor', 'router']
+                : level.id === 15 ? ['dispatch', 'authentication', 'router', 'translation']
+                  : level.id === 16 ? ['authentication', 'reactor', 'packet', 'router', 'translation', 'consent']
+                    : level.activeModules,
 }))
 
 export function campaignLevel(level: number): CampaignLevel { return campaignLevels[Math.max(0, Math.min(campaignLevels.length - 1, level - 1))] }
+
+function missionPhases(gameStyle: GameStyle, levelId: number, activeModules: ModuleId[]): ModuleId[][] {
+  if (gameStyle !== 'campaign') return [[...activeModules]]
+  const plans: Record<number, ModuleId[][]> = {
+    1: [['reactor']],
+    2: [['reactor'], ['router']],
+    3: [['reactor'], ['router'], ['translation']],
+    4: [['reactor'], ['router'], ['translation']],
+    5: [['authentication'], ['router'], ['translation']],
+    6: [['packet'], ['translation']],
+    7: [['triage'], ['reactor'], ['router'], ['translation']],
+    8: [['memory'], ['reactor'], ['router'], ['translation']],
+    9: [['packet'], ['router']],
+    10: [['triage'], ['quarantine'], ['reactor'], ['router']],
+    11: [['authentication'], ['router'], ['translation']],
+    12: [['router'], ['translation'], ['consent']],
+    13: [['reality'], ['reactor'], ['router'], ['translation']],
+    14: [['memory'], ['reactor'], ['router'], ['translation']],
+    15: [['dispatch']],
+    16: [['authentication'], ['reactor'], ['packet'], ['router'], ['translation'], ['consent']],
+  }
+  const phases = (plans[levelId] || [activeModules]).map(phase => phase.filter(module => activeModules.includes(module))).filter(phase => phase.length)
+  if (levelId !== 15) activeModules.filter(module => !phases.flat().includes(module)).forEach(module => phases.push([module]))
+  return phases
+}
 
 function modifierPool(level: number): CampaignModifier[] {
   if (level < 7) return ['none']
@@ -401,7 +465,7 @@ export function roleName(role: RoleId | null, language: Locale = 'de'): string {
 
 function createAuthenticationCandidates(levelId: number, language: Locale, random: () => number): FullGame['authentication'] {
   const de = language === 'de'
-  const label = levelId === 5 ? 'Mara Vale // MV-404-0214' : (de ? 'Vellunischer Zeuge // Akte 88-B' : 'Vellune witness // Record 88-B')
+  const label = levelId === 5 || levelId === 16 ? `Mara Vale // MV-404-0214${levelId === 16 ? ` // ${de ? 'URSPRÜNGLICHE CREW' : 'ORIGINAL CREW'}` : ''}` : (de ? 'Vellunischer Zeuge // Akte 88-B' : 'Vellune witness // Record 88-B')
   const candidates = shuffle<AuthenticationCandidate>([
     { id: '', channel: '', label, timestamp: de ? '02:14 // DRIFT 0 ms' : '02:14 // DRIFT 0 ms', waveform: de ? 'ORGANISCHES JITTER' : 'ORGANIC JITTER', challenge: de ? 'Keine. Wir sind der Helpdesk.' : 'None. We work helpdesk.', certificate: de ? 'GÜLTIGE KETTE // LIVE-ROUTE' : 'VALID CHAIN // LIVE ROUTE', kind: 'genuine' },
     { id: '', channel: '', label, timestamp: de ? '02:14 // DRIFT 0 ms' : '02:14 // DRIFT 0 ms', waveform: de ? 'PERFEKTE SCHLEIFE' : 'PERFECT LOOP', challenge: de ? 'Eine. Bitte öffnet die Verbindung.' : 'One. Please open the connection.', certificate: de ? 'GEKLONTE KETTE // KEINE LIVE-ROUTE' : 'CLONED CHAIN // NO LIVE ROUTE', kind: 'relay-generated' },
@@ -442,13 +506,129 @@ function createConsentHandshake(levelId: number, language: Locale, random: () =>
   }
 }
 
-export function createGame(seed: number, playerCount: number, language: Locale = 'de', now = Date.now(), difficulty: DifficultyId = 'standard', gameStyle: GameStyle = 'fast', campaignLevelId = 1): FullGame {
+function powerRequirement(triage: FullGame['triage'], habitat: PowerHabitat) {
+  const linkedHeat = habitat.linkedTo && triage.habitats.find(candidate => candidate.id === habitat.linkedTo)?.heat === 'hot' ? 1 : 0
+  return habitat.baseMinimum + (habitat.load === 'high' ? 1 : 0) + (habitat.heat === 'hot' ? 1 : 0) + linkedHeat
+}
+
+function refreshPowerTriage(triage: FullGame['triage']) {
+  triage.habitats.forEach(habitat => { habitat.capacity = powerRequirement(triage, habitat) + habitat.reserve })
+  triage.budget = triage.habitats.reduce((total, habitat) => total + powerRequirement(triage, habitat), 0)
+}
+
+function createPowerTriage(levelId: number, language: Locale, random: () => number): FullGame['triage'] {
+  const de = language === 'de'
+  const labels = levelId === 10
+    ? (de ? ['Moosrat-Transitkuppel', 'Khepri-Rettungskapsel', 'Orrixianischer Sanitätsring'] : ['Moss Council transit dome', 'Khepri lifeboat', 'Orrixian medical ring'])
+    : (de ? ['Maras Zukunftscrew', 'Archiv 404 // Zeugen', 'Vellunischer Schutzraum'] : ['Mara’s future crew', 'Archive 404 // witnesses', 'Vellune refuge'])
+  const habitats: PowerHabitat[] = labels.map((label, index) => ({
+    id: `POWER-${String.fromCharCode(65 + index)}`,
+    label,
+    baseMinimum: [1, 2, 1][index],
+    load: random() < 0.5 ? 'low' : 'high',
+    heat: random() < 0.5 ? 'cool' : 'hot',
+    capacity: 0,
+    reserve: random() < 0.5 ? 0 : 1,
+  }))
+  habitats[2].linkedTo = habitats[0].id
+  const triage: FullGame['triage'] = { resolved: false, budget: 0, habitats }
+  refreshPowerTriage(triage)
+  return triage
+}
+
+function createMemoryRepair(levelId: number, language: Locale, random: () => number): FullGame['memory'] {
+  const de = language === 'de'
+  const labels = levelId === 14
+    ? (de ? ['Fragmentgeflecht', 'Identitätskern', 'Direktivenklausel', 'Relaisname'] : ['Fragment braid', 'Identity kernel', 'Directive clause', 'Relay name'])
+    : (de ? ['Direktivenkopf', 'Evakuierungsersatz', 'Zustimmungssperre', 'Ausgangsrelais-Index'] : ['Directive header', 'Evacuation fallback', 'Consent gate', 'Outbound relay index'])
+  const profiles = shuffle([
+    { protected: true, mismatch: true, replaceable: true },
+    { protected: false, mismatch: true, replaceable: true },
+    { protected: false, mismatch: true, replaceable: false },
+    { protected: false, mismatch: false, replaceable: false },
+  ], random)
+  const blocks: MemoryBlock[] = labels.map((label, index) => {
+    const storedParity = (random() < 0.5 ? 0 : 1) as 0 | 1
+    return { id: `MEM-${String.fromCharCode(65 + index)}`, label, storedParity, expectedParity: (profiles[index].mismatch ? 1 - storedParity : storedParity) as 0 | 1, protected: profiles[index].protected }
+  })
+  profiles.forEach((profile, index) => { if (profile.replaceable) blocks[index].replacementFrom = blocks[(index + 1) % blocks.length].id })
+  const revealedText = levelId === 14
+    ? (de ? 'DIREKTIVE: KEINE TÜR ÖFFNET SICH OHNE EINE KLARE EINLADUNG. RELAISNAME: EINE TÜR, DIE FRAGEN MUSS.' : 'DIRECTIVE: NO DOOR OPENS WITHOUT A CLEAR INVITATION. RELAY NAME: A DOOR THAT MUST ASK.')
+    : (de ? 'FUNKTION WIEDERHERGESTELLT: ZUSTIMMUNGS-HANDSHAKE // KEINE ABSCHALTUNG. AUSGEHENDER WECKIMPULS GESENDET.' : 'FUNCTION RESTORED: CONSENT HANDSHAKE // NOT SHUTDOWN. OUTBOUND WAKE BURST SENT.')
+  return { resolved: false, blocks, revealedText }
+}
+
+function createRealityComparison(language: Locale, random: () => number): FullGame['reality'] {
+  const de = language === 'de'
+  const makeFeed = (kind: RealityFeed['kind'], desiredRoute: RealityRoute): RealityFeed => {
+    const livePhase = Math.floor(random() * 6)
+    const desiredParity = desiredRoute === 'aurora' ? 0 : 1
+    const routeKeyParity = ((desiredParity - livePhase) % 2 + 2) % 2
+    const routeKey = 2 * Math.floor(random() * 3) + routeKeyParity
+    return {
+      id: '',
+      label: '',
+      livePhase,
+      routeKey,
+      kind,
+      inhabited: true,
+      archiveMarker: kind === 'original'
+        ? (de ? 'MONDARCHIV 1969 // DURCHGÄNGIGE HERKUNFT' : 'LUNAR ARCHIVE 1969 // CONTINUOUS PROVENANCE')
+        : (de ? 'RELAIS-GEBURTSREGISTER // BEWUSST SEIT DER TEILUNG' : 'RELAY BIRTH LEDGER // CONSCIOUS SINCE SPLIT'),
+    }
+  }
+  return {
+    resolved: false,
+    feeds: shuffle([makeFeed('original', 'aurora'), makeFeed('copy', 'umbra')], random).map((feed, index) => ({ ...feed, id: `EARTH-${String.fromCharCode(65 + index)}`, label: `${de ? 'ERD-ÜBERTRAGUNG' : 'EARTH FEED'} ${String.fromCharCode(65 + index)}` })),
+  }
+}
+
+function createDispatchQueue(language: Locale, random: () => number): FullGame['dispatch'] {
+  const de = language === 'de'
+  const callers: DispatchCaller[] = [
+    { id: 'CALL-V', label: de ? 'Vellunischer Zeuge // Akte 88-B' : 'Vellune witness // Record 88-B', failureCountdown: 70 + Math.floor(random() * 6), riskBuffer: 40, risk: de ? 'ZERBRECHLICHES ZEUGENGEDÄCHTNIS' : 'FRAGILE WITNESS MEMORY', module: 'authentication' },
+    { id: 'CALL-E', label: de ? 'Rat der kopierten Erde' : 'Copied Earth Council', failureCountdown: 24 + Math.floor(random() * 5), riskBuffer: 5, risk: de ? 'BEWOHNTE ROUTE // KEINE LÖSCHUNG' : 'INHABITED ROUTE // DO NOT DELETE', dependsOn: 'CALL-V', module: 'router' },
+    { id: 'CALL-Q', label: de ? 'Abweichlerin der Stillen Versammlung' : 'Quiet Assembly dissident', failureCountdown: 52 + Math.floor(random() * 5), riskBuffer: 10, risk: de ? 'FEINDLICHE STÖRUNG' : 'HOSTILE INTERFERENCE', module: 'translation' },
+  ]
+  return { resolved: false, callers: shuffle(callers, random), dispatchedOrder: [] }
+}
+
+function quarantineMedium(kind: QuarantineKind): QuarantineMedium {
+  return kind === 'biological' ? 'air' : kind === 'informational' ? 'data' : 'time'
+}
+
+function quarantineLinks(quarantine: Pick<FullGame['quarantine'], 'kind' | 'sourceZoneId' | 'occupiedZoneId' | 'zones'>, language: Locale): QuarantineLink[] {
+  const de = language === 'de'; const medium = quarantineMedium(quarantine.kind)
+  const sourceIndex = quarantine.zones.findIndex(zone => zone.id === quarantine.sourceZoneId)
+  const otherMedium = (['air', 'data', 'time'] as QuarantineMedium[]).find(candidate => candidate !== medium)!
+  const control = (letter: string) => `${de ? 'ISOLATIONSSCHALTER' : 'ISOLATION CONTROL'} ${letter}`
+  return [
+    { id: 'LOCK-A', label: control('A'), from: quarantine.sourceZoneId, to: quarantine.zones[(sourceIndex + 1) % quarantine.zones.length].id, medium },
+    { id: 'LOCK-B', label: control('B'), from: quarantine.sourceZoneId, to: quarantine.zones[(sourceIndex + 3) % quarantine.zones.length].id, medium },
+    { id: 'LOCK-C', label: control('C'), from: quarantine.occupiedZoneId, to: 'SAFE', medium },
+    { id: 'LOCK-D', label: control('D'), from: quarantine.zones[(sourceIndex + 1) % quarantine.zones.length].id, to: quarantine.occupiedZoneId, medium: otherMedium },
+  ]
+}
+
+function createQuarantine(language: Locale, random: () => number): FullGame['quarantine'] {
+  const de = language === 'de'
+  const kinds: QuarantineKind[] = ['biological', 'informational', 'temporal']
+  const zones = (de ? ['Kryobucht', 'Archivknoten', 'Transitkern', 'Rettungsdock'] : ['Cryo Bay', 'Archive Node', 'Transit Core', 'Rescue Dock']).map((label, index) => ({ id: `ZONE-${String.fromCharCode(65 + index)}`, label }))
+  const sourceIndex = Math.floor(random() * zones.length)
+  const quarantine: FullGame['quarantine'] = { resolved: false, kind: kinds[Math.floor(random() * kinds.length)], medium: 'air', sourceZoneId: zones[sourceIndex].id, occupiedZoneId: zones[(sourceIndex + 2) % zones.length].id, zones, links: [] }
+  quarantine.medium = quarantineMedium(quarantine.kind)
+  quarantine.links = quarantineLinks(quarantine, language)
+  return quarantine
+}
+
+export function createGame(seed: number, playerCount: number, language: Locale = 'de', now = Date.now(), difficulty: DifficultyId = 'standard', gameStyle: GameStyle = 'fast', campaignLevelId = 1, campaignBonusObjective?: BonusObjective): FullGame {
   const random = mulberry32(seed)
-  const caller = species[Math.floor(random() * species.length)]
+  const randomCaller = species[Math.floor(random() * species.length)]
   const symbols = shuffle(Object.keys(symbolMeta) as SymbolId[], random)
   const telemetry = { flux: Math.floor(random() * 6), phase: Math.floor(random() * 6), coolant: Math.floor(random() * 6) }
   const glyphs = shuffle(Object.keys(symbolMeta) as SymbolId[], random).slice(0, 3)
   const level = campaignLevel(campaignLevelId)
+  const caller = gameStyle === 'campaign' && level.id === 16 ? { en: 'Mara Vale // original Shift 404 crew', de: 'Mara Vale // ursprüngliche Crew der Schicht 404', affinity: 'curved' as const, offset: 0 } : randomCaller
   const variants = gameStyle === 'campaign' ? level.variants : { router: ['classic', 'eclipse', 'mirror'] as RouterProtocol[], reactor: ['crossfeed', 'coolant-loop', 'phase-lock'] as ReactorFormula[], palettes: [0, 1, 2, 3], directions: ['forward', 'reverse'] as Array<'forward' | 'reverse'> }
   const choose = <T,>(items: T[]) => items[Math.floor(random() * items.length)]
   const protocol = choose(variants.router)
@@ -457,21 +637,27 @@ export function createGame(seed: number, playerCount: number, language: Locale =
   const direction = choose(variants.directions)
   const settings = gameStyle === 'campaign' ? level.rules : difficultyConfig[difficulty]
   const activeModules = gameStyle === 'campaign' ? [...level.activeModules] : [...allModules]
+  const phases = missionPhases(gameStyle, level.id, activeModules)
   const modifier = gameStyle === 'campaign' ? choose(modifierPool(level.id)) : 'none'
-  const bonusObjective = gameStyle === 'campaign' && level.id >= 7 ? choose<BonusObjective>(['no-mistakes', 'high-stability', 'fast-finish']) : undefined
-  const followUpModule = gameStyle === 'campaign' && level.id >= 9 ? activeModules[seed % activeModules.length] : undefined
+  const bonusObjective = gameStyle === 'campaign' && campaignBonusObjective ? campaignBonusObjective : gameStyle === 'campaign' && level.id >= 7 ? choose<BonusObjective>(['no-mistakes', 'high-stability', 'fast-finish']) : undefined
+  const followUpModule = gameStyle === 'campaign' && level.id >= 9 && level.id < 16 ? activeModules[seed % activeModules.length] : undefined
   const authentication = createAuthenticationCandidates(level.id, language, random)
   const packet = createTemporalPacket(level.id, language, random)
   const consent = createConsentHandshake(level.id, language, random)
+  const triage = createPowerTriage(level.id, language, random)
+  const memory = createMemoryRepair(level.id, language, random)
+  const reality = createRealityComparison(language, random)
+  const dispatch = createDispatchQueue(language, random)
+  const quarantine = createQuarantine(language, random)
   const state: FullGame = {
     seed, playerCount, language, gameStyle, campaignLevel: gameStyle === 'campaign' ? level.id : undefined, difficulty, shiftRules: { ...settings }, activeModules, startedAt: now, endsAt: now + settings.durationMs, lastPressureAt: now, stability: 100,
     incidentsResolved: 0, incorrectActions: 0, damagedSystems: 0, unauthorizedWormholes: Math.floor(random() * 3), score: 0, outcome: 'playing', modifier, bonusObjective, forgivenModules: [],
-    targetIncidents: activeModules.length + (followUpModule ? 1 : 0), followUpModule, followUpTriggered: false,
+    targetIncidents: activeModules.length + (followUpModule ? 1 : 0), followUpModule, followUpTriggered: false, phases,
     log: [gameStyle === 'campaign'
       ? (language === 'de' ? `Kapitel ${level.id}: ${level.title.de}. Der Auftrag beginnt.` : `Chapter ${level.id}: ${level.title.en}. The mission begins.`)
       : (language === 'de' ? `Schicht gestartet. ${activeModules.length === 1 ? 'Ein dringender Vorfall blinkt' : `${activeModules.length} dringende Vorfälle blinken`}.` : `Shift started. ${activeModules.length === 1 ? 'One priority incident is blinking' : `${activeModules.length} priority incidents are blinking`}.`)],
     router: { resolved: false, nodes: symbols.map((symbol, i) => ({ id: `N${i + 1}`, symbol, code: `${String.fromCharCode(65 + i)}-${Math.floor(random() * 90 + 10)}` })), species: caller[language], affinity: caller.affinity, baseFrequency: 35 + Math.floor(random() * 10), protocol },
-    reactor: { resolved: false, dials: [0, 0, 0], telemetry, speciesOffset: caller.offset, formula }, translation: { resolved: false, glyphs, sequence: [], paletteShift, direction }, authentication, packet, consent,
+    reactor: { resolved: false, dials: [0, 0, 0], telemetry, speciesOffset: caller.offset, formula }, translation: { resolved: false, glyphs, sequence: [], paletteShift, direction }, authentication, packet, consent, triage, memory, reality, dispatch, quarantine,
   }
   state.translation.sequence = translationSolution(state)
   state.score = scoreForGame(state, now)
@@ -516,8 +702,45 @@ export function packetSolution(game: Pick<FullGame, 'packet'>) {
 export function consentSolution(game: Pick<FullGame, 'consent'>) {
   return { permissions: [...game.consent.requiredSequence], responseId: game.consent.correctResponseId }
 }
+export function triageSolution(game: Pick<FullGame, 'triage'>): PowerAllocation[] {
+  return game.triage.habitats.map(habitat => ({ habitatId: habitat.id, units: powerRequirement(game.triage, habitat) }))
+}
+export function memorySolution(game: Pick<FullGame, 'memory'>): MemoryChoice[] {
+  return game.memory.blocks.map(block => ({ blockId: block.id, decision: block.protected ? 'lock' : block.storedParity === block.expectedParity ? 'lock' : block.replacementFrom ? 'restore' : 'discard' }))
+}
+export function realitySolution(game: Pick<FullGame, 'reality'>): RealityAssignment[] {
+  return game.reality.feeds.map(feed => ({ feedId: feed.id, classification: feed.kind, route: (feed.livePhase + feed.routeKey) % 2 === 0 ? 'aurora' : 'umbra' }))
+}
+export function dispatchSolution(game: Pick<FullGame, 'dispatch'>): string[] {
+  const remaining = [...game.dispatch.callers]
+  const order: string[] = []
+  while (remaining.length) {
+    const eligible = remaining.filter(caller => !caller.dependsOn || order.includes(caller.dependsOn))
+    if (!eligible.length) return []
+    eligible.sort((a, b) => (a.failureCountdown - a.riskBuffer) - (b.failureCountdown - b.riskBuffer) || a.id.localeCompare(b.id))
+    const next = eligible[0]
+    order.push(next.id)
+    remaining.splice(remaining.findIndex(caller => caller.id === next.id), 1)
+  }
+  return order
+}
+export function quarantineSolution(game: Pick<FullGame, 'quarantine'>): QuarantineChoice[] {
+  return game.quarantine.links.map(link => ({ linkId: link.id, sealed: link.medium === game.quarantine.medium && link.from === game.quarantine.sourceZoneId }))
+}
+function resolvedModules(game: FullGame): Record<ModuleId, boolean> {
+  return { router: game.router.resolved, reactor: game.reactor.resolved, translation: game.translation.resolved, authentication: game.authentication.resolved, packet: game.packet.resolved, consent: game.consent.resolved, triage: game.triage.resolved, memory: game.memory.resolved, reality: game.reality.resolved, dispatch: game.dispatch.resolved, quarantine: game.quarantine.resolved }
+}
+function currentMissionPhase(game: FullGame) {
+  const resolved = resolvedModules(game)
+  const index = game.phases.findIndex(phase => phase.some(module => !resolved[module]))
+  return { index: index < 0 ? Math.max(0, game.phases.length - 1) : index, modules: index < 0 ? [] : game.phases[index].filter(module => !resolved[module]) }
+}
+function dispatchCurrentModule(game: FullGame): DispatchModule | undefined {
+  if (!game.activeModules.includes('dispatch') || !game.dispatch.resolved) return undefined
+  return game.dispatch.dispatchedOrder.map(id => game.dispatch.callers.find(caller => caller.id === id)).find(caller => caller && !game[caller.module].resolved)?.module
+}
 function consentReady(game: FullGame) {
-  const resolved: Record<ModuleId, boolean> = { router: game.router.resolved, reactor: game.reactor.resolved, translation: game.translation.resolved, authentication: game.authentication.resolved, packet: game.packet.resolved, consent: game.consent.resolved }
+  const resolved = resolvedModules(game)
   return game.activeModules.filter(module => module !== 'consent').every(module => resolved[module])
 }
 function refreshPacketChecksums(packet: FullGame['packet']) {
@@ -544,6 +767,9 @@ function bonusEarnedForGame(game: FullGame, scoredAt = game.completedAt ?? Math.
   ))
 }
 function sameSet(a: string[], b: string[]) { return a.length === b.length && a.every((value) => b.includes(value)) }
+function sameRealityPlan(a: RealityAssignment[], b: RealityAssignment[]) {
+  return a.length === b.length && b.every(target => a.some(choice => choice.feedId === target.feedId && choice.classification === target.classification && choice.route === target.route))
+}
 function beginFollowUp(game: FullGame) {
   const module = game.followUpModule
   if (!module || game.followUpTriggered) return
@@ -578,7 +804,39 @@ function beginFollowUp(game: FullGame) {
     game.consent.responses = [...game.consent.responses.slice(1), game.consent.responses[0]]
     game.consent.correctResponseId = game.consent.responses.find(response => response.kind === 'yes')!.id
   }
-  const names: Record<ModuleId, string> = game.language === 'de' ? { router: 'Quantenrouter', reactor: 'Reaktorkalibrierung', translation: 'Übersetzungsmatrix', authentication: 'Anrufer-Authentifizierung', packet: 'Zeitpaket-Rekonstruktion', consent: 'Zustimmungs-Handshake' } : { router: 'Quantum Router', reactor: 'Reactor Calibration', translation: 'Translation Matrix', authentication: 'Caller Authentication', packet: 'Temporal Packet Reconstruction', consent: 'Consent Handshake' }
+  if (module === 'triage') {
+    game.triage.resolved = false
+    game.triage.habitats[0].load = game.triage.habitats[0].load === 'low' ? 'high' : 'low'
+    const heats = game.triage.habitats.map(habitat => habitat.heat)
+    game.triage.habitats.forEach((habitat, index) => { habitat.heat = heats[(index + 1) % heats.length] })
+    refreshPowerTriage(game.triage)
+  }
+  if (module === 'memory') {
+    game.memory.resolved = false
+    game.memory.blocks.forEach(block => { block.storedParity = (1 - block.storedParity) as 0 | 1; block.expectedParity = (1 - block.expectedParity) as 0 | 1 })
+  }
+  if (module === 'reality') {
+    game.reality.resolved = false
+    game.reality.feeds.forEach(feed => { feed.livePhase = wrapDial(feed.livePhase + 1) })
+  }
+  if (module === 'dispatch') {
+    game.dispatch.resolved = false
+    game.dispatch.dispatchedOrder = []
+    game.phases = [['dispatch']]
+    game.dispatch.callers.forEach((caller, index) => { caller.failureCountdown = Math.max(1, caller.failureCountdown - index - 1) })
+  }
+  if (module === 'quarantine') {
+    const kinds: QuarantineKind[] = ['biological', 'informational', 'temporal']
+    const sourceIndex = (game.quarantine.zones.findIndex(zone => zone.id === game.quarantine.sourceZoneId) + 1) % game.quarantine.zones.length
+    game.quarantine.resolved = false
+    game.quarantine.kind = kinds[(kinds.indexOf(game.quarantine.kind) + 1) % kinds.length]
+    game.quarantine.medium = quarantineMedium(game.quarantine.kind)
+    game.quarantine.sourceZoneId = game.quarantine.zones[sourceIndex].id
+    game.quarantine.occupiedZoneId = game.quarantine.zones[(sourceIndex + 2) % game.quarantine.zones.length].id
+    game.quarantine.links = quarantineLinks(game.quarantine, game.language)
+    delete game.quarantine.contaminatedModule
+  }
+  const names: Record<ModuleId, string> = game.language === 'de' ? { router: 'Quantenrouter', reactor: 'Reaktorkalibrierung', translation: 'Übersetzungsmatrix', authentication: 'Anrufer-Authentifizierung', packet: 'Zeitpaket-Rekonstruktion', consent: 'Zustimmungs-Handshake', triage: 'Notstrom-Triage', memory: 'Speicher-Paritätsreparatur', reality: 'Realitätsvergleich', dispatch: 'Einsatzwarteschlange', quarantine: 'Quarantänesperre' } : { router: 'Quantum Router', reactor: 'Reactor Calibration', translation: 'Translation Matrix', authentication: 'Caller Authentication', packet: 'Temporal Packet Reconstruction', consent: 'Consent Handshake', triage: 'Emergency Power Triage', memory: 'Memory Parity Repair', reality: 'Reality Comparison', dispatch: 'Dispatch Queue', quarantine: 'Quarantine Lock' }
   game.log.unshift(game.language === 'de' ? `Folgeticket eingegangen: ${names[module]} wurde mit neuen Daten wieder geöffnet.` : `Follow-up ticket received: ${names[module]} reopened with new data.`)
 }
 
@@ -591,6 +849,24 @@ export function applyAction(game: FullGame, action: GameAction, now = Date.now()
   let usedGrace = false
   let module: ModuleId | '' = ''
   const grace = next.variationGrace && now <= next.variationGrace.until ? next.variationGrace : undefined
+  const requestedModule: ModuleId = action.type === 'router-connect' ? 'router'
+    : action.type === 'reactor-calibrate' ? 'reactor'
+      : action.type === 'translation-submit' ? 'translation'
+        : action.type === 'authentication-submit' ? 'authentication'
+          : action.type === 'packet-submit' ? 'packet'
+            : action.type === 'consent-submit' ? 'consent'
+              : action.type === 'triage-submit' ? 'triage'
+                : action.type === 'memory-submit' ? 'memory'
+                  : action.type === 'reality-submit' ? 'reality'
+                    : action.type === 'dispatch-submit' ? 'dispatch' : 'quarantine'
+  if (next.activeModules.includes(requestedModule) && !resolvedModules(next)[requestedModule] && !currentMissionPhase(next).modules.includes(requestedModule)) return current
+  const powerLocked = next.activeModules.includes('triage') && !next.triage.resolved
+  if (powerLocked && (action.type === 'router-connect' || action.type === 'reactor-calibrate' || action.type === 'translation-submit')) return current
+  const quarantineLocked = next.activeModules.includes('quarantine') && !next.quarantine.resolved
+  if (quarantineLocked && (action.type === 'router-connect' || action.type === 'reactor-calibrate')) return current
+  if (next.activeModules.includes('memory') && !next.memory.resolved && action.type === 'translation-submit') return current
+  const queuedActionModule: DispatchModule | undefined = action.type === 'authentication-submit' ? 'authentication' : action.type === 'router-connect' ? 'router' : action.type === 'translation-submit' ? 'translation' : undefined
+  if (next.activeModules.includes('dispatch') && queuedActionModule && next.activeModules.includes(queuedActionModule) && !next[queuedActionModule].resolved && (!next.dispatch.resolved || dispatchCurrentModule(next) !== queuedActionModule)) return current
   if (action.type === 'router-connect' && next.activeModules.includes('router') && !next.router.resolved) { const chosen = [action.a, action.b].map((id) => next.router.nodes.find((node) => node.id === id)?.symbol || ''); correct = sameSet(chosen, routerSolution(next)); usedGrace = !correct && !!grace?.router && sameSet(chosen, grace.router); correct ||= usedGrace; module = 'router'; if (correct) next.router.resolved = true }
   if (action.type === 'reactor-calibrate' && next.activeModules.includes('reactor') && !next.reactor.resolved) { correct = action.dials.every((value, index) => value === reactorSolution(next)[index]); usedGrace = !correct && !!grace?.reactor && action.dials.every((value, index) => value === grace.reactor![index]); correct ||= usedGrace; module = 'reactor'; if (correct) next.reactor.resolved = true }
   if (action.type === 'translation-submit' && next.activeModules.includes('translation') && !next.translation.resolved) { correct = action.sequence.join(',') === translationSolution(next).join(','); usedGrace = !correct && !!grace?.translation && action.sequence.join(',') === grace.translation.join(','); correct ||= usedGrace; module = 'translation'; if (correct) next.translation.resolved = true }
@@ -602,8 +878,57 @@ export function applyAction(game: FullGame, action: GameAction, now = Date.now()
     module = 'consent'
     if (correct) next.consent.resolved = true
   }
+  if (action.type === 'triage-submit' && next.activeModules.includes('triage') && !next.triage.resolved) {
+    const solution = triageSolution(next)
+    correct = action.allocations.length === solution.length && solution.every(target => action.allocations.find(allocation => allocation.habitatId === target.habitatId)?.units === target.units)
+    module = 'triage'
+    if (correct) {
+      next.triage.resolved = true
+      const highLoads = next.triage.habitats.filter(habitat => habitat.load === 'high').length
+      const hotLines = next.triage.habitats.filter(habitat => habitat.heat === 'hot').length
+      next.reactor.telemetry = { flux: wrapDial(next.reactor.telemetry.flux + highLoads), phase: wrapDial(next.reactor.telemetry.phase + hotLines), coolant: wrapDial(next.reactor.telemetry.coolant + next.triage.budget) }
+      next.router.baseFrequency = 30 + ((next.router.baseFrequency - 30 + next.triage.budget + hotLines) % 31)
+    }
+  }
+  if (action.type === 'memory-submit' && next.activeModules.includes('memory') && !next.memory.resolved) {
+    const solution = memorySolution(next)
+    correct = action.choices.length === solution.length && solution.every(target => action.choices.find(choice => choice.blockId === target.blockId)?.decision === target.decision)
+    module = 'memory'
+    if (correct) next.memory.resolved = true
+  }
+  if (action.type === 'reality-submit' && next.activeModules.includes('reality') && !next.reality.resolved) {
+    const solution = realitySolution(next)
+    correct = sameRealityPlan(action.assignments, solution)
+    usedGrace = !correct && !!grace?.reality && sameRealityPlan(action.assignments, grace.reality)
+    correct ||= usedGrace
+    module = 'reality'
+    if (correct) next.reality.resolved = true
+  }
+  if (action.type === 'dispatch-submit' && next.activeModules.includes('dispatch') && !next.dispatch.resolved) {
+    correct = action.callerIds.join(',') === dispatchSolution(next).join(',')
+    module = 'dispatch'
+    if (correct) {
+      next.dispatch.resolved = true
+      next.dispatch.dispatchedOrder = [...action.callerIds]
+      next.phases = [['dispatch'], ...action.callerIds.map(id => [next.dispatch.callers.find(caller => caller.id === id)!.module])]
+    }
+  }
+  if (action.type === 'quarantine-submit' && next.activeModules.includes('quarantine') && !next.quarantine.resolved) {
+    const solution = quarantineSolution(next)
+    correct = action.choices.length === solution.length && solution.every(target => action.choices.find(choice => choice.linkId === target.linkId)?.sealed === target.sealed)
+    module = 'quarantine'
+    if (correct) {
+      next.quarantine.resolved = true
+      delete next.quarantine.contaminatedModule
+    } else {
+      const target = next.seed % 2 === 0 ? 'reactor' : 'router'
+      next.quarantine.contaminatedModule = target
+      if (target === 'reactor') next.reactor.telemetry = { flux: wrapDial(next.reactor.telemetry.flux + 1), phase: wrapDial(next.reactor.telemetry.phase + 2), coolant: wrapDial(next.reactor.telemetry.coolant + 3) }
+      else next.router.baseFrequency = 30 + ((next.router.baseFrequency - 30 + 11) % 31)
+    }
+  }
   if (!module) return game
-  const moduleNames: Record<ModuleId, string> = next.language === 'de' ? { router: 'Quantenrouter', reactor: 'Reaktorkalibrierung', translation: 'Übersetzungsmatrix', authentication: 'Anrufer-Authentifizierung', packet: 'Zeitpaket-Rekonstruktion', consent: 'Zustimmungs-Handshake' } : { router: 'Quantum Router', reactor: 'Reactor Calibration', translation: 'Translation Matrix', authentication: 'Caller Authentication', packet: 'Temporal Packet Reconstruction', consent: 'Consent Handshake' }
+  const moduleNames: Record<ModuleId, string> = next.language === 'de' ? { router: 'Quantenrouter', reactor: 'Reaktorkalibrierung', translation: 'Übersetzungsmatrix', authentication: 'Anrufer-Authentifizierung', packet: 'Zeitpaket-Rekonstruktion', consent: 'Zustimmungs-Handshake', triage: 'Notstrom-Triage', memory: 'Speicher-Paritätsreparatur', reality: 'Realitätsvergleich', dispatch: 'Einsatzwarteschlange', quarantine: 'Quarantänesperre' } : { router: 'Quantum Router', reactor: 'Reactor Calibration', translation: 'Translation Matrix', authentication: 'Caller Authentication', packet: 'Temporal Packet Reconstruction', consent: 'Consent Handshake', triage: 'Emergency Power Triage', memory: 'Memory Parity Repair', reality: 'Reality Comparison', dispatch: 'Dispatch Queue', quarantine: 'Quarantine Lock' }
   const forgiven = !correct && next.gameStyle === 'campaign' && (next.campaignLevel || 99) <= 2 && !next.forgivenModules.includes(module)
   if (correct) {
     next.incidentsResolved += 1; next.stability = Math.min(100, next.stability + 6)
@@ -616,17 +941,29 @@ export function applyAction(game: FullGame, action: GameAction, now = Date.now()
         translation: `Die fremde Stimme ist verstanden. Ihre Nachricht wird Teil von „${title}“.`,
         authentication: `Die echte Stimme in „${title}“ wurde bestätigt; die anderen Kanäle bleiben geschützt.`,
         packet: `Das Zeitpaket in „${title}“ wurde in der geprüften Reihenfolge zusammengesetzt.`,
-        consent: `Der Zustimmungs-Handshake in „${title}“ wurde ausdrücklich und mit begrenzten Rechten bestätigt.`
+        consent: `Der Zustimmungs-Handshake in „${title}“ wurde ausdrücklich und mit begrenzten Rechten bestätigt.`,
+        triage: `Alle bewohnten Bereiche in „${title}“ erhalten ihre sichere Notstromzuteilung.`,
+        memory: `Die geschützten Speicherblöcke in „${title}“ wurden ohne Überschreibung repariert.`,
+        reality: `Beide bewohnten Realitäten in „${title}“ wurden identifiziert, geschützt und getrennt.`,
+        dispatch: `Die Zeugen in „${title}“ wurden in einer sicheren, abhängigen Reihenfolge eingeplant.`,
+        quarantine: `Die Gefahr in „${title}“ wurde isoliert, ohne den lebenden Anrufer einzuschließen.`
       } : {
         router: `The path through “${title}” is open. The signal reaches its next destination.`,
         reactor: `The core holds. “${title}” has enough power to continue.`,
         translation: `The alien voice is understood. Its message becomes part of “${title}”.`,
         authentication: `The genuine voice in “${title}” is verified; the other channels remain protected.`,
         packet: `The temporal packet in “${title}” is assembled in verified order.`,
-        consent: `The consent handshake in “${title}” is explicit and limited to verified permissions.`
+        consent: `The consent handshake in “${title}” is explicit and limited to verified permissions.`,
+        triage: `Every occupied habitat in “${title}” receives its safe emergency allocation.`,
+        memory: `The protected memory blocks in “${title}” are repaired without overwrite.`,
+        reality: `Both inhabited realities in “${title}” are identified, protected, and separated.`,
+        dispatch: `The witnesses in “${title}” are scheduled in a safe, dependency-aware order.`,
+        quarantine: `The hazard in “${title}” is isolated without trapping the living caller.`
       }
       next.log.unshift(level.moduleOutcomes[module]?.[next.language] || narrative[module])
       if (module === 'packet') next.log.unshift(next.language === 'de' ? `Nachricht wiederhergestellt: „${next.packet.message}“` : `Message reconstructed: “${next.packet.message}”`)
+      if (module === 'triage') next.log.unshift(next.language === 'de' ? 'Stromnetz stabil: Reaktortelemetrie und Routerfrequenz wurden neu berechnet.' : 'Power grid stable: reactor telemetry and router frequency recalculated.')
+      if (module === 'memory') next.log.unshift(next.language === 'de' ? `Archivtext wiederhergestellt: „${next.memory.revealedText}“` : `Archive text restored: “${next.memory.revealedText}”`)
     } else next.log.unshift(next.language === 'de' ? `${moduleNames[module]} gelöst. Jemand sollte das Ticket schließen, bevor es wieder aufgeht.` : `${moduleNames[module]} cleared. Someone close the ticket before it reopens.`)
     if (usedGrace) next.log.unshift(next.language === 'de' ? 'Datensperre bestätigt: Die Eingabe vor dem Druckstoß wurde akzeptiert.' : 'Data lock confirmed: the pre-surge submission was accepted.')
   } else if (forgiven) {
@@ -637,6 +974,16 @@ export function applyAction(game: FullGame, action: GameAction, now = Date.now()
     next.incorrectActions += 1; next.stability = Math.max(0, next.stability - penalty); next.damagedSystems += next.incorrectActions % 2 === 0 ? 1 : 0; next.unauthorizedWormholes += action.type === 'translation-submit' ? 1 : 0
     next.log.unshift(next.language === 'de' ? `${moduleNames[module]} hat die Prozedur abgelehnt. Stabilität −${penalty}.` : `${moduleNames[module]} rejected the procedure. Stability −${penalty}.`)
     if (action.type === 'consent-submit' && next.consent.responses.find(response => response.id === action.responseId)?.kind === 'silence') next.log.unshift(next.language === 'de' ? 'Zustimmungsprüfung fehlgeschlagen: Schweigen ist keine Zustimmung.' : 'Consent verification failed: silence is not consent.')
+    if (action.type === 'triage-submit') next.log.unshift(next.language === 'de' ? 'Projektion verworfen: Mindestens ein bewohnter Bereich läge unter seiner Überlebensgrenze. Keine Schalter wurden umgelegt.' : 'Projection rejected: at least one occupied habitat would fall below its survival threshold. No breakers changed.')
+    if (action.type === 'memory-submit') next.log.unshift(next.language === 'de' ? 'Reparatursimulation verworfen: Geschützte Erinnerungen bleiben unverändert.' : 'Repair simulation rejected: protected memories remain unchanged.')
+    if (action.type === 'reality-submit') {
+      const markedUnsafe = action.assignments.some(assignment => assignment.classification === 'unsafe')
+      next.log.unshift(markedUnsafe
+        ? (next.language === 'de' ? 'Trennung verworfen: Beide Übertragungen sind bewohnt. Eine Kopie ist kein unsicheres Echo.' : 'Separation rejected: both feeds are inhabited. A copy is not an unsafe echo.')
+        : (next.language === 'de' ? 'Trennung verworfen: Herkunft oder Live-Routenzuweisung stimmt nicht. Keine Realität wurde verändert.' : 'Separation rejected: provenance or live route assignment does not match. Neither reality was altered.'))
+    }
+    if (action.type === 'dispatch-submit') next.log.unshift(next.language === 'de' ? 'Warteschlangensimulation verworfen: Mindestens ein Zeuge würde zu früh, zu spät oder vor seiner Abhängigkeit aufgerufen.' : 'Queue simulation rejected: at least one witness would be called too early, too late, or before its dependency.')
+    if (action.type === 'quarantine-submit') next.log.unshift(next.language === 'de' ? `Quarantäneprojektion verworfen: ${next.quarantine.contaminatedModule === 'reactor' ? 'Reaktortelemetrie' : 'Routerdaten'} kontaminiert. Der lebende Anrufer bleibt vorerst am Ausgang.` : `Quarantine projection rejected: ${next.quarantine.contaminatedModule === 'reactor' ? 'reactor telemetry' : 'router data'} contaminated. The living caller remains at the exit for now.`)
   }
   if (correct && next.incidentsResolved === next.activeModules.length && next.followUpModule && !next.followUpTriggered) beginFollowUp(next)
   if (next.stability <= 0) { next.outcome = 'lost'; next.completedAt = now; next.endReason = next.language === 'de' ? 'Die Stationsstabilität ist auf null gefallen. Der Helpdesk ist jetzt technisch gesehen eine Hilfskugel.' : 'Station stability reached zero. The helpdesk is now technically a help-sphere.' }
@@ -691,6 +1038,14 @@ export function advanceClock(game: FullGame, now = Date.now()): FullGame {
       rotateTimestamps(1)
       next.variationGrace = { ...next.variationGrace, until: latestPulseAt + 5e3, packet: previousOrder }
       next.log.unshift(next.language === 'de' ? 'Zeitdrift erkannt: Paket-Zeitstempel und Prüfsummen wurden aktualisiert.' : 'Temporal drift detected: packet timestamps and checksums updated.')
+    }
+    if (next.activeModules.includes('reality') && !next.reality.resolved) {
+      const advancePhases = (count: number) => next.reality.feeds.forEach(feed => { feed.livePhase = wrapDial(feed.livePhase + count) })
+      advancePhases(pulses - 1)
+      const previousPlan = realitySolution(next)
+      advancePhases(1)
+      next.variationGrace = { ...next.variationGrace, until: latestPulseAt + 5e3, reality: previousPlan }
+      next.log.unshift(next.language === 'de' ? 'Horizontdrift erkannt: Die Live-Phasen beider Erd-Übertragungen wurden aktualisiert.' : 'Horizon drift detected: both Earth feeds have new live phases.')
     }
     next.lastPressureAt = latestPulseAt
   }
@@ -796,8 +1151,86 @@ function consentEngineerPanel(game: FullGame): RoleView['panels'][number] {
   return { eyebrow: de ? 'Zustimmung // Sicherheitsprozedur' : 'Consent // safety procedure', title: de ? 'Handshake-Phasen ordnen' : 'Order handshake phases', tone: 'mint', notes: [...phases, de ? 'Keine Phase darf ergänzt, ausgelassen oder wiederholt werden.' : 'Do not add, omit, or repeat a phase.'] }
 }
 
+function triageAnalystPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'
+  return { eyebrow: de ? 'Notstrom // Live-Telemetrie' : 'Emergency power // live telemetry', title: de ? 'Last & Leitungshitze' : 'Load & line heat', tone: 'orange', table: { headers: de ? ['Bereich', 'Last', 'Hitze'] : ['Habitat', 'Load', 'Heat'], rows: game.triage.habitats.map(habitat => [habitat.label, habitat.load === 'high' ? (de ? 'HOCH +1' : 'HIGH +1') : (de ? 'NIEDRIG +0' : 'LOW +0'), habitat.heat === 'hot' ? (de ? 'HEISS +1' : 'HOT +1') : (de ? 'KÜHL +0' : 'COOL +0')]) }, notes: [de ? 'Lest alle aktuellen Werte laut vor. Die Ingenieurakte erklärt, wie sie zur Mindestversorgung beitragen.' : 'Read every live value aloud. The engineering procedure explains how each contributes to minimum power.'] }
+}
+
+function triageArchivistPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'
+  return { eyebrow: de ? 'Notstrom // Lebensschutzakte' : 'Emergency power // life-support record', title: de ? 'Überlebensminimum' : 'Survival minimum', tone: 'pink', rows: game.triage.habitats.map(habitat => ({ label: habitat.label, value: `${habitat.baseMinimum} ${de ? 'EINHEITEN' : 'UNITS'}` })), notes: [de ? 'Alle aufgeführten Bereiche sind bewohnt. Keiner darf unter seinem berechneten Minimum liegen.' : 'Every listed habitat is occupied. None may fall below its calculated minimum.'] }
+}
+
+function triageEngineerPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'; const labelFor = (id?: string) => game.triage.habitats.find(habitat => habitat.id === id)?.label || '—'
+  return { eyebrow: de ? `Notstrom // Budget ${game.triage.budget}` : `Emergency power // budget ${game.triage.budget}`, title: de ? 'Netzformel & Abhängigkeiten' : 'Grid formula & dependencies', tone: 'mint', table: { headers: de ? ['Bereich', 'Kapazität', 'Verbindung'] : ['Habitat', 'Capacity', 'Dependency'], rows: game.triage.habitats.map(habitat => [habitat.label, `${habitat.capacity} ${de ? 'MAX.' : 'MAX'}`, habitat.linkedTo ? (de ? `+1 WENN ${labelFor(habitat.linkedTo)} HEISS` : `+1 IF ${labelFor(habitat.linkedTo)} HOT`) : '—']) }, notes: de ? ['ZIEL = Überlebensminimum + Lastzuschlag + Hitzezuschlag + Verbindungszuschlag.', 'Verteilt exakt das gesamte Budget. Keine Leitung darf ihre Kapazität überschreiten.'] : ['TARGET = survival minimum + load surcharge + heat surcharge + dependency surcharge.', 'Allocate the entire budget exactly. No line may exceed its capacity.'] }
+}
+
+function memoryAnalystPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'
+  return { eyebrow: de ? 'Speicher // Paritätsscan' : 'Memory // parity scan', title: de ? 'Gespeichert & erwartet' : 'Stored & expected', tone: 'orange', table: { headers: de ? ['Block', 'Gespeichert', 'Erwartet'] : ['Block', 'Stored', 'Expected'], rows: game.memory.blocks.map(block => [block.label, `P${block.storedParity}`, `P${block.expectedParity}`]) }, notes: [de ? 'Gleiche Werte sind intakt. Verschiedene Werte markieren einen beschädigten Block.' : 'Matching values are intact. Different values mark a corrupted block.'] }
+}
+
+function memoryArchivistPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'
+  return { eyebrow: de ? 'Speicher // Schutzregister' : 'Memory // protection register', title: de ? 'Lebende Erinnerungen schützen' : 'Protect living memories', tone: 'pink', rows: game.memory.blocks.map(block => ({ label: block.label, value: block.protected ? (de ? 'GESCHÜTZT' : 'PROTECTED') : (de ? 'STANDARD' : 'STANDARD') })), notes: [de ? 'Geschützte Blöcke enthalten bewusste oder identitätsstiftende Erinnerungen. Immer SPERREN, auch bei falscher Parität.' : 'Protected blocks contain conscious or identity-bearing memories. Always LOCK them, even when parity is wrong.'] }
+}
+
+function memoryEngineerPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'; const labelFor = (id?: string) => game.memory.blocks.find(block => block.id === id)?.label || '—'
+  return { eyebrow: de ? 'Speicher // Ersatzpfade' : 'Memory // replacement paths', title: de ? 'Sichere Reparaturregeln' : 'Safe repair rules', tone: 'mint', table: { headers: de ? ['Block', 'Geprüfte Ersatzquelle'] : ['Block', 'Verified replacement'], rows: game.memory.blocks.map(block => [block.label, labelFor(block.replacementFrom)]) }, notes: de ? ['GESCHÜTZT → SPERREN.', 'STANDARD + Parität korrekt → SPERREN.', 'STANDARD + Parität falsch + Ersatzquelle → WIEDERHERSTELLEN.', 'STANDARD + Parität falsch + keine Quelle → VERWERFEN.'] : ['PROTECTED → LOCK.', 'STANDARD + parity matches → LOCK.', 'STANDARD + parity mismatch + replacement → RESTORE.', 'STANDARD + parity mismatch + no replacement → DISCARD.'] }
+}
+
+function realityAnalystPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'
+  return { eyebrow: de ? 'Realität // Live-Horizont' : 'Reality // live horizon', title: de ? 'Aktuelle Phasenwerte' : 'Current phase values', tone: 'orange', rows: game.reality.feeds.map(feed => ({ label: feed.label, value: `P${feed.livePhase}` })), notes: [de ? 'Horizontdrift ändert diese Werte bei jedem Druckstoß. Lest beide direkt vor der Trennung erneut vor.' : 'Horizon drift changes these values at every pressure surge. Read both again immediately before separation.'] }
+}
+
+function realityArchivistPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'
+  return { eyebrow: de ? 'Realität // Herkunftsregister' : 'Reality // provenance register', title: de ? 'Kontinuität & Personsein' : 'Continuity & personhood', tone: 'pink', table: { headers: de ? ['Übertragung', 'Archivanker', 'Zensus'] : ['Feed', 'Archive anchor', 'Census'], rows: game.reality.feeds.map(feed => [feed.label, feed.archiveMarker, feed.inhabited ? (de ? 'BEWOHNT // BEWUSST' : 'INHABITED // CONSCIOUS') : (de ? 'UNBEWOHNTES ECHO' : 'EMPTY ECHO')]) }, notes: [de ? 'Durchgängige Herkunft bedeutet ORIGINAL; ein Relais-Geburtsregister bedeutet KOPIE. Beides sind lebende Welten. UNSICHER ist nur für ein unbewohntes Echo zulässig.' : 'Continuous provenance means ORIGINAL; a relay birth ledger means COPY. Both are living worlds. UNSAFE is reserved for an empty echo.'] }
+}
+
+function realityEngineerPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'
+  return { eyebrow: de ? 'Realität // Trennrouten' : 'Reality // separation routes', title: de ? 'Live-Route berechnen' : 'Calculate the live route', tone: 'mint', rows: game.reality.feeds.map(feed => ({ label: feed.label, value: `${de ? 'ROUTENSCHLÜSSEL' : 'ROUTE KEY'} ${feed.routeKey}` })), notes: de ? ['Addiert für jede Übertragung LIVE-PHASE + ROUTENSCHLÜSSEL.', 'Gerade Summe → AURORA. Ungerade Summe → UMBRA.', 'Beide bewohnten Welten müssen geschützt werden und getrennte Routen erhalten.'] : ['For each feed, add LIVE PHASE + ROUTE KEY.', 'Even total → AURORA. Odd total → UMBRA.', 'Protect both inhabited worlds and place them on separate routes.'] }
+}
+
+function dispatchAnalystPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'
+  return { eyebrow: de ? 'Warteschlange // Live-Uhren' : 'Dispatch // live clocks', title: de ? 'Ausfall-Countdowns' : 'Failure countdowns', tone: 'orange', rows: game.dispatch.callers.map(caller => ({ label: caller.label, value: `T−${caller.failureCountdown}s` })), notes: [de ? 'Der kürzeste rohe Countdown ist nicht automatisch zuerst dran. Die Archivrisiken verändern die wirksame Dringlichkeit.' : 'The shortest raw countdown is not automatically first. Archive risks alter effective urgency.'] }
+}
+
+function dispatchArchivistPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'
+  return { eyebrow: de ? 'Warteschlange // Zeugenrisiken' : 'Dispatch // witness risks', title: de ? 'Risikopuffer' : 'Risk buffers', tone: 'pink', table: { headers: de ? ['Anrufer', 'Risiko', 'Puffer'] : ['Caller', 'Risk', 'Buffer'], rows: game.dispatch.callers.map(caller => [caller.label, caller.risk, `${caller.riskBuffer}s`]) }, notes: [de ? 'Alle drei sind frühere, lebende Beteiligte. Der Puffer misst, wie viel früher ihr Vorfall behandelt werden muss.' : 'All three are returning, living stakeholders. The buffer measures how much earlier their incident must be handled.'] }
+}
+
+function dispatchEngineerPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'; const labelFor = (id?: string) => game.dispatch.callers.find(caller => caller.id === id)?.label || (de ? 'KEINE' : 'NONE')
+  return { eyebrow: de ? 'Warteschlange // Einsatzregeln' : 'Dispatch // service rules', title: de ? 'Abhängige Reihenfolge' : 'Dependency-aware order', tone: 'mint', table: { headers: de ? ['Anrufer', 'Muss warten auf'] : ['Caller', 'Must wait for'], rows: game.dispatch.callers.map(caller => [caller.label, labelFor(caller.dependsOn)]) }, notes: de ? ['WIRKSAME DRINGLICHKEIT = AUSFALL-COUNTDOWN − RISIKOPUFFER.', 'Wählt unter allen Anrufern, deren Abhängigkeiten bereits erledigt sind, stets den kleinsten Wert.', 'Die bestätigte Reihenfolge aktiviert danach genau diese Vorfälle nacheinander.'] : ['EFFECTIVE URGENCY = FAILURE COUNTDOWN − RISK BUFFER.', 'Among callers whose dependencies are already complete, always choose the lowest value.', 'The confirmed order then activates those incidents one at a time.'] }
+}
+
+function quarantineAnalystPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'; const labelFor = (id: string) => game.quarantine.zones.find(zone => zone.id === id)?.label || id
+  return { eyebrow: de ? 'Quarantäne // Live-Scan' : 'Quarantine // live scan', title: de ? 'Kontamination & Lebenszeichen' : 'Contamination & life signs', tone: 'orange', rows: [{ label: de ? 'QUELLE' : 'SOURCE', value: labelFor(game.quarantine.sourceZoneId) }, { label: de ? 'LEBENDER ANRUFER' : 'LIVING CALLER', value: labelFor(game.quarantine.occupiedZoneId) }], notes: [de ? 'Der Anrufer ist nicht die Kontaminationsquelle und muss einen offenen Weg zum sicheren Bereich behalten.' : 'The caller is not the contamination source and must retain an open path to the safe refuge.'] }
+}
+
+function quarantineArchivistPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'
+  const kinds: Record<QuarantineKind, string> = de ? { biological: 'BIOLOGISCHE SPOREN', informational: 'INFORMATIONS-WURM', temporal: 'ZEITLICHES ECHO' } : { biological: 'BIOLOGICAL SPORES', informational: 'INFORMATION WORM', temporal: 'TEMPORAL ECHO' }
+  const media: Record<QuarantineMedium, string> = de ? { air: 'LUFT', data: 'DATEN', time: 'ZEIT' } : { air: 'AIR', data: 'DATA', time: 'TIME' }
+  return { eyebrow: de ? 'Quarantäne // Gefahrenakte' : 'Quarantine // hazard record', title: de ? 'Ausbreitungsprofil' : 'Spread profile', tone: 'pink', rows: [{ label: de ? 'GEFAHR' : 'HAZARD', value: kinds[game.quarantine.kind] }, { label: de ? 'ÜBERTRÄGER' : 'CARRIER', value: media[game.quarantine.medium] }], notes: [de ? 'Nur Verbindungen mit diesem Überträger können die aktuelle Gefahr weitertragen. Eine andere Gefahrenart nutzt dieselbe Isolationslogik mit einem anderen Überträger.' : 'Only links carrying this medium can spread the current hazard. Other hazard skins use the same isolation logic with a different carrier.'] }
+}
+
+function quarantineEngineerPanel(game: FullGame): RoleView['panels'][number] {
+  const de = game.language === 'de'; const labelFor = (id: string) => id === 'SAFE' ? (de ? 'SICHERER BEREICH' : 'SAFE REFUGE') : game.quarantine.zones.find(zone => zone.id === id)?.label || id
+  const media: Record<QuarantineMedium, string> = de ? { air: 'LUFT', data: 'DATEN', time: 'ZEIT' } : { air: 'AIR', data: 'DATA', time: 'TIME' }
+  return { eyebrow: de ? 'Quarantäne // Flussdiagramm' : 'Quarantine // flow diagram', title: de ? 'Gerichtete Türen & Schächte' : 'Directed doors & vents', tone: 'mint', table: { headers: de ? ['Schalter', 'Richtung', 'Träger'] : ['Control', 'Direction', 'Carrier'], rows: game.quarantine.links.map(link => [link.label, `${labelFor(link.from)} → ${labelFor(link.to)}`, media[link.medium]]) }, notes: de ? ['SPERREN: Verbindung trägt den Gefahren-Überträger UND zeigt von der Quelle weg.', 'OFFEN LASSEN: jede andere Verbindung. Das erhält insbesondere den Fluchtweg des Anrufers.', 'Richtungspfeile sind verbindlich; die Gefahr fließt nicht rückwärts.'] : ['SEAL: the link carries the hazard medium AND points outward from the source.', 'LEAVE OPEN: every other link. This preserves the caller’s escape route.', 'Direction arrows are binding; the hazard does not flow backward.'] }
+}
+
 function engineerPanels(game: FullGame) {
-  return [game.activeModules.includes('authentication') && authenticationEngineerPanel(game), game.activeModules.includes('packet') && packetEngineerPanel(game), game.activeModules.includes('consent') && consentEngineerPanel(game), game.activeModules.includes('router') && routerRulesPanel(game), game.activeModules.includes('reactor') && reactorRulesPanel(game), game.activeModules.includes('translation') && translationRulesPanel(game)].filter(Boolean) as RoleView['panels']
+  return [game.activeModules.includes('authentication') && authenticationEngineerPanel(game), game.activeModules.includes('packet') && packetEngineerPanel(game), game.activeModules.includes('consent') && consentEngineerPanel(game), game.activeModules.includes('triage') && triageEngineerPanel(game), game.activeModules.includes('memory') && memoryEngineerPanel(game), game.activeModules.includes('reality') && realityEngineerPanel(game), game.activeModules.includes('dispatch') && dispatchEngineerPanel(game), game.activeModules.includes('quarantine') && quarantineEngineerPanel(game), game.activeModules.includes('router') && routerRulesPanel(game), game.activeModules.includes('reactor') && reactorRulesPanel(game), game.activeModules.includes('translation') && translationRulesPanel(game)].filter(Boolean) as RoleView['panels']
 }
 
 function analystPanels(game: FullGame) {
@@ -807,6 +1240,11 @@ function analystPanels(game: FullGame) {
   if (game.activeModules.includes('authentication')) panels.push(authenticationAnalystPanel(game))
   if (game.activeModules.includes('packet')) panels.push(packetAnalystPanel(game))
   if (game.activeModules.includes('consent')) panels.push(consentAnalystPanel(game))
+  if (game.activeModules.includes('triage')) panels.push(triageAnalystPanel(game))
+  if (game.activeModules.includes('memory')) panels.push(memoryAnalystPanel(game))
+  if (game.activeModules.includes('reality')) panels.push(realityAnalystPanel(game))
+  if (game.activeModules.includes('dispatch')) panels.push(dispatchAnalystPanel(game))
+  if (game.activeModules.includes('quarantine')) panels.push(quarantineAnalystPanel(game))
   const meter = (value: number) => `${value}   ${'●'.repeat(value)}${'○'.repeat(5 - value)}`
   if (game.activeModules.includes('reactor')) panels.push({ eyebrow: de ? 'Live-Telemetrie' : 'Live telemetry', title: de ? 'Reaktordaten' : 'Reactor feed', tone: 'orange' as const, rows: [{ label: de ? '≋  Fluss' : '≋  Flux', value: meter(game.reactor.telemetry.flux) }, { label: '◉  Phase', value: meter(game.reactor.telemetry.phase) }, { label: de ? '❄  Kühlmittel' : '❄  Coolant', value: meter(game.reactor.telemetry.coolant) }], notes: [de ? 'Zahl und Leuchtpunkte zeigen dasselbe Signal von 0 bis 5.' : 'The number and lit pips show the same signal from 0 to 5.'] })
   if (game.activeModules.some(module => module === 'router' || module === 'translation')) panels.push({ eyebrow: de ? 'Live-Telemetrie' : 'Live telemetry', title: de ? 'Router & Station' : 'Router & station', tone: 'mint' as const, rows: [...(game.activeModules.includes('router') ? [{ label: de ? 'Routerfrequenz' : 'Router frequency', value: `${effectiveRouterFrequency(game)} THz` }, { label: de ? 'Frequenzband' : 'Frequency band', value: effectiveRouterFrequency(game) >= 50 ? (de ? 'HOCH' : 'HIGH') : (de ? 'NIEDRIG' : 'LOW') }] : []), ...(game.activeModules.includes('translation') ? [{ label: de ? 'Stationszustand' : 'Station condition', value: conditionLabel }] : [])], notes: game.activeModules.includes('router') ? (game.reactor.resolved ? [de ? 'Reaktor stabil: Frequenzaufschlag des Routers entfernt.' : 'Reactor stable: router frequency penalty removed.'] : [de ? 'Die Reaktorinstabilität addiert 20 THz zur Routerfrequenz.' : 'Reactor instability adds +20 THz to the router feed.']) : undefined })
@@ -818,6 +1256,11 @@ function archivistPanels(game: FullGame) {
   if (game.activeModules.includes('authentication')) panels.push(authenticationArchivistPanel(game))
   if (game.activeModules.includes('packet')) panels.push(packetArchivistPanel(game))
   if (game.activeModules.includes('consent')) panels.push(consentArchivistPanel(game))
+  if (game.activeModules.includes('triage')) panels.push(triageArchivistPanel(game))
+  if (game.activeModules.includes('memory')) panels.push(memoryArchivistPanel(game))
+  if (game.activeModules.includes('reality')) panels.push(realityArchivistPanel(game))
+  if (game.activeModules.includes('dispatch')) panels.push(dispatchArchivistPanel(game))
+  if (game.activeModules.includes('quarantine')) panels.push(quarantineArchivistPanel(game))
   if (game.activeModules.some(module => module === 'router' || module === 'reactor')) panels.push({ eyebrow: de ? 'Anruferdossier' : 'Caller dossier', title: game.router.species, tone: 'mint' as const, rows: [...(game.activeModules.includes('router') ? [{ label: de ? 'Routeraffinität' : 'Router affinity', value: game.router.affinity === 'angular' ? (de ? 'ECKIG' : 'ANGULAR') : (de ? 'KURVIG' : 'CURVED') }] : []), ...(game.activeModules.includes('reactor') ? [{ label: de ? 'Reaktor-Offset' : 'Reactor offset', value: `+${game.reactor.speciesOffset}` }] : [])], notes: [de ? 'Nenne sie niemals „den Kunden“. Ihre Rechtsabteilung überwacht diese Frequenz.' : 'Never call them “the customer.” Their legal department monitors this frequency.'] })
   if (game.activeModules.some(module => module === 'router' || module === 'translation')) {
     const glyphs = game.activeModules.includes('router') ? (Object.keys(symbolMeta) as SymbolId[]) : game.translation.glyphs
@@ -845,7 +1288,7 @@ function campaignHint(game: FullGame, now: number, role: RoleId) {
       return de ? `NOTFALLHINWEIS: Verbindet ${answer}. Sagt dem Operator auch, welche Glyphen diese Namen tragen.` : `EMERGENCY HINT: Connect ${answer}. Also tell the Operator which glyphs carry those names.`
     }
   }
-  if (game.campaignLevel === 3 && !game.translation.resolved) {
+  if (game.campaignLevel === 3 && !game.translation.resolved && currentMissionPhase(game).modules.includes('translation')) {
     if (role === 'operator') return de ? 'HINWEIS: Beschreibt die drei Glyphen in Reihenfolge. Fragt nach Leserichtung, Kategorien und aktuellem Stationszustand.' : 'HINT: Describe the three glyphs in order. Ask for reading direction, categories, and current station condition.'
     if (!reveal) return de ? 'HINWEIS: Archivar liefert Kategorien, Analyst den Stationszustand und Ingenieur Leserichtung plus Farbtabelle.' : 'HINT: Archivist supplies categories, Analyst the station condition, and Engineer the direction and color table.'
     const answer = translationSolution(game).map(color => `${buttonMarker(color)} ${buttonLabel(color, game.language)}`).join(' – ')
@@ -856,13 +1299,15 @@ function campaignHint(game: FullGame, now: number, role: RoleId) {
 
 export function viewForRole(game: FullGame, role: RoleId, now = Date.now()): GameView {
   const hint = campaignHint(game, now, role)
-  const common: GameView = { seed: game.seed, language: game.language, gameStyle: game.gameStyle, campaignLevel: game.campaignLevel, difficulty: game.difficulty, activeModules: game.activeModules, targetIncidents: game.targetIncidents, now, endsAt: game.endsAt, nextPressureAt: Math.min(game.endsAt, game.lastPressureAt + game.shiftRules.pressureEveryMs), variationGraceUntil: game.variationGrace?.until, stability: game.stability, score: game.score, incidentsResolved: game.incidentsResolved, incorrectActions: game.incorrectActions, damagedSystems: game.damagedSystems, unauthorizedWormholes: game.unauthorizedWormholes, outcome: game.outcome, endReason: game.endReason, log: game.log.slice(0, 5), moduleStatus: { router: game.router.resolved, reactor: game.reactor.resolved, translation: game.translation.resolved, authentication: game.authentication.resolved, packet: game.packet.resolved, consent: game.consent.resolved }, modifierText: game.modifier === 'none' ? undefined : modifierDescription(game.modifier, game.language), bonusText: game.bonusObjective ? bonusDescription(game.bonusObjective, game.language) : undefined, bonusEarned: game.bonusObjective ? bonusEarnedForGame(game) : undefined, hint }
-  if (role === 'operator') { const { affinity: _affinity, baseFrequency: _frequency, protocol: _protocol, ...router } = game.router; return { ...common, operator: { router, reactor: { resolved: game.reactor.resolved, dials: game.reactor.dials }, translation: { resolved: game.translation.resolved, glyphs: game.translation.glyphs }, authentication: { resolved: game.authentication.resolved, candidates: game.authentication.candidates.map(({ id, channel, label }) => ({ id, channel, label })) }, packet: { resolved: game.packet.resolved, tiles: game.packet.tiles.map(({ id, label }) => ({ id, label })), message: game.packet.resolved ? game.packet.message : undefined }, consent: { resolved: game.consent.resolved, ready: consentReady(game), permissions: game.consent.permissions, responses: game.consent.responses.map(({ id, channel }) => ({ id, channel })), subject: game.consent.subject } } } }
+  const phase = currentMissionPhase(game)
+  const common: GameView = { seed: game.seed, language: game.language, gameStyle: game.gameStyle, campaignLevel: game.campaignLevel, difficulty: game.difficulty, activeModules: game.activeModules, visibleModules: phase.modules, phaseIndex: phase.index, phaseCount: game.phases.length, targetIncidents: game.targetIncidents, now, endsAt: game.endsAt, nextPressureAt: Math.min(game.endsAt, game.lastPressureAt + game.shiftRules.pressureEveryMs), variationGraceUntil: game.variationGrace?.until, stability: game.stability, score: game.score, incidentsResolved: game.incidentsResolved, incorrectActions: game.incorrectActions, damagedSystems: game.damagedSystems, unauthorizedWormholes: game.unauthorizedWormholes, outcome: game.outcome, endReason: game.endReason, log: game.log.slice(0, 5), moduleStatus: resolvedModules(game), modifierText: game.modifier === 'none' ? undefined : modifierDescription(game.modifier, game.language), bonusText: game.bonusObjective ? bonusDescription(game.bonusObjective, game.language) : undefined, bonusEarned: game.bonusObjective ? bonusEarnedForGame(game) : undefined, hint }
+  if (role === 'operator') { const { affinity: _affinity, baseFrequency: _frequency, protocol: _protocol, ...router } = game.router; return { ...common, operator: { router, reactor: { resolved: game.reactor.resolved, dials: game.reactor.dials }, translation: { resolved: game.translation.resolved, glyphs: game.translation.glyphs }, authentication: { resolved: game.authentication.resolved, candidates: game.authentication.candidates.map(({ id, channel, label }) => ({ id, channel, label })) }, packet: { resolved: game.packet.resolved, tiles: game.packet.tiles.map(({ id, label }) => ({ id, label })), message: game.packet.resolved ? game.packet.message : undefined }, consent: { resolved: game.consent.resolved, ready: consentReady(game), permissions: game.consent.permissions, responses: game.consent.responses.map(({ id, channel }) => ({ id, channel })), subject: game.consent.subject }, triage: { resolved: game.triage.resolved, budget: game.triage.budget, habitats: game.triage.habitats.map(({ id, label }) => ({ id, label })) }, memory: { resolved: game.memory.resolved, blocks: game.memory.blocks.map(({ id, label }) => ({ id, label })), revealedText: game.memory.resolved ? game.memory.revealedText : undefined }, reality: { resolved: game.reality.resolved, feeds: game.reality.feeds.map(({ id, label }) => ({ id, label })) }, dispatch: { resolved: game.dispatch.resolved, callers: game.dispatch.callers.map(({ id, label }) => ({ id, label })), dispatchedOrder: [...game.dispatch.dispatchedOrder], currentModule: dispatchCurrentModule(game) }, quarantine: { resolved: game.quarantine.resolved, links: game.quarantine.links.map(({ id, label }) => ({ id, label })), contaminatedModule: game.quarantine.contaminatedModule } } } }
   const de = game.language === 'de'
+  const manualGame: FullGame = { ...game, activeModules: phase.modules }
   const config: Record<Exclude<RoleId, 'operator'>, { title: string; subtitle: string; panels: RoleView['panels'] }> = de ? {
-    engineer: { title: 'Systemingenieur', subtitle: 'Du hast die Prozeduren. Lass die anderen die Eingaben liefern.', panels: engineerPanels(game) }, analyst: { title: 'Telemetrieanalyst', subtitle: 'Vertrau den Zahlen. Die meisten davon sind wahrscheinlich echt.', panels: analystPanels(game) }, archivist: { title: 'Xeno-Archivar', subtitle: 'Spezies, Symbole und uralte Ausnahmen sind jetzt dein Problem.', panels: archivistPanels(game) }, specialist: { title: 'Missionsspezialist', subtitle: 'Kleine Crew, großes Handbuch. Du hast alle Spezialhinweise.', panels: [...analystPanels(game), ...archivistPanels(game), ...engineerPanels(game)] }, researcher: { title: 'Forschungsleitung', subtitle: 'Du betreust die Live-Telemetrie und das gesamte Xeno-Archiv.', panels: [...analystPanels(game), ...archivistPanels(game)] },
+    engineer: { title: 'Systemingenieur', subtitle: 'Du hast die Prozeduren. Lass die anderen die Eingaben liefern.', panels: engineerPanels(manualGame) }, analyst: { title: 'Telemetrieanalyst', subtitle: 'Vertrau den Zahlen. Die meisten davon sind wahrscheinlich echt.', panels: analystPanels(manualGame) }, archivist: { title: 'Xeno-Archivar', subtitle: 'Spezies, Symbole und uralte Ausnahmen sind jetzt dein Problem.', panels: archivistPanels(manualGame) }, specialist: { title: 'Missionsspezialist', subtitle: 'Kleine Crew, großes Handbuch. Du hast alle Spezialhinweise.', panels: [...analystPanels(manualGame), ...archivistPanels(manualGame), ...engineerPanels(manualGame)] }, researcher: { title: 'Forschungsleitung', subtitle: 'Du betreust die Live-Telemetrie und das gesamte Xeno-Archiv.', panels: [...analystPanels(manualGame), ...archivistPanels(manualGame)] },
   } : {
-    engineer: { title: 'Systems Engineer', subtitle: 'You have the procedures. Make everyone else provide the inputs.', panels: engineerPanels(game) }, analyst: { title: 'Telemetry Analyst', subtitle: 'Trust the numbers. Most of them are probably real.', panels: analystPanels(game) }, archivist: { title: 'Xeno Archivist', subtitle: 'Species, symbols, and ancient exceptions are your problem now.', panels: archivistPanels(game) }, specialist: { title: 'Mission Specialist', subtitle: 'Small crew, big manual. You hold every specialist clue.', panels: [...analystPanels(game), ...archivistPanels(game), ...engineerPanels(game)] }, researcher: { title: 'Research Lead', subtitle: 'You cover live telemetry and the entire xeno archive.', panels: [...analystPanels(game), ...archivistPanels(game)] },
+    engineer: { title: 'Systems Engineer', subtitle: 'You have the procedures. Make everyone else provide the inputs.', panels: engineerPanels(manualGame) }, analyst: { title: 'Telemetry Analyst', subtitle: 'Trust the numbers. Most of them are probably real.', panels: analystPanels(manualGame) }, archivist: { title: 'Xeno Archivist', subtitle: 'Species, symbols, and ancient exceptions are your problem now.', panels: archivistPanels(manualGame) }, specialist: { title: 'Mission Specialist', subtitle: 'Small crew, big manual. You hold every specialist clue.', panels: [...analystPanels(manualGame), ...archivistPanels(manualGame), ...engineerPanels(manualGame)] }, researcher: { title: 'Research Lead', subtitle: 'You cover live telemetry and the entire xeno archive.', panels: [...analystPanels(manualGame), ...archivistPanels(manualGame)] },
   }
   if (game.gameStyle === 'campaign' && game.campaignLevel) {
     const level = campaignLevel(game.campaignLevel)
