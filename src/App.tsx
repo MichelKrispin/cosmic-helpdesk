@@ -182,6 +182,10 @@ function App() {
     return () => clearInterval(timer)
   }, [hostBroadcastState, isHost, screen])
   useEffect(() => { document.documentElement.lang = language }, [language])
+  useEffect(() => {
+    if (screen === 'home' || screen === 'lobby') return
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+  }, [screen, view?.seed])
   useEffect(() => () => meshRef.current?.close(), [])
   useEffect(() => {
     if (!view || view.outcome === 'playing') return
