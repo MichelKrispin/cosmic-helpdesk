@@ -12,6 +12,17 @@
   --pink: #ff6fae;
   --cyan: #53d8ff;
 }
+.sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+:where(button, input, [tabindex]):focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
+.audio-controls { position: fixed; right: 14px; bottom: 14px; z-index: 100; display: grid; justify-items: end; gap: 7px; font: 9px var(--mono); }
+.audio-toggle, .audio-panel button { min-height: 36px; padding: 7px 10px; border: 1px solid #526076; background: #0c121eee; color: var(--paper); font: inherit; cursor: pointer; }
+.audio-toggle span { margin-left: 5px; }
+.audio-panel { width: min(280px, calc(100vw - 28px)); padding: 12px; border: 1px solid #526076; background: #0b111df5; box-shadow: 7px 7px 0 #03050a; display: grid; gap: 10px; }
+.audio-panel > label { display: flex; align-items: center; gap: 8px; color: #b9c0ce; }
+.audio-panel > label:has(input[type='range']) { display: grid; grid-template-columns: auto 1fr; }
+.audio-panel input[type='range'] { width: 100%; accent-color: var(--cyan); }
+.narration-actions { display: grid; grid-template-columns: 1fr auto; gap: 7px; padding-top: 3px; border-top: 1px solid #313b4d; }
+.audio-visual-cue { min-height: 1em; padding: 3px 7px; background: #080d16cc; color: var(--cyan); }
 
 code, .kicker, .fineprint, .signal-pill, .connection-state { font-family: ui-monospace, 'Cascadia Mono', 'Roboto Mono', monospace; }
 
@@ -395,4 +406,9 @@ nav, .app-shell > header { height: 92px; max-width: 1280px; margin: auto; paddin
 @media (max-width: 720px) {
   nav, .app-shell > header { padding: 0 20px; }.signal-pill { display: none; }.language-selector > span { display: none; }.hero { padding: 55px 20px; }.hero h1 { font-size: 50px; }.hero-console { transform: none; }.how-grid { grid-template-columns: 1fr; padding: 0 20px 50px; }.how-grid article { padding-right: 0; }.lobby-card { margin: 25px 14px; padding: 22px; }.lobby-heading, .lobby-footer { align-items: flex-start; flex-direction: column; }.invite-box { align-items: stretch; flex-direction: column; }.language-row, .difficulty-row, .style-row { align-items: flex-start; flex-direction: column; }.difficulty-selector, .style-selector { justify-content: flex-start; }.campaign-map-heading, .campaign-brief { align-items: flex-start; flex-direction: column; }.campaign-route { grid-template-columns: repeat(2, 1fr); }.campaign-route button:nth-child(2n + 1)::before { display: none; }.campaign-brief small { text-align: left; }.crew-grid { grid-template-columns: 1fr; }.game-header { grid-template-columns: minmax(70px, 1fr) 120px auto; gap: 10px; padding: 10px 12px; }.game-header .brand { display: none; }.game-header .score-box { grid-column: 1; grid-row: 1; }.game-header .stability { grid-column: 2; grid-row: 1; min-width: 0; }.game-header .icon-button { grid-column: 3; grid-row: 1; }.shift-clock { grid-column: 1 / -1; grid-row: 2; width: 100%; padding: 8px 0 0; border: 0; border-top: 1px solid #313748; }.score-box { min-width: 0; }.game-content { padding: 20px 12px; }.role-banner { align-items: flex-start; flex-direction: column; gap: 12px; }.role-banner p:last-child { text-align: left; }.module-grid, .module-grid.modules-1, .module-grid.modules-2 { grid-template-columns: minmax(0, 1fr); }.translation-card { grid-column: auto; }.manual-layout { grid-template-columns: minmax(0, 1fr); }.manual-sidebar { display: grid; grid-template-columns: 1fr 1fr; }.id-card { grid-row: span 2; }.event-log { grid-template-columns: 1fr; gap: 8px; }.end-card { padding: 28px 20px; }.end-actions { flex-direction: column; }
   .mission-dossier { margin-top: 20px; padding: 25px 20px; }.mission-facts { grid-template-columns: 1fr; }.briefing-launch { align-items: flex-start; flex-direction: column; }.briefing-launch .primary { width: 100%; }.desktop-screen > header { padding: 0 14px; }.desktop-screen > header > span { display: none; }.desktop-grid { width: calc(100% - 24px); padding: 18px 0; grid-template-columns: 1fr; }.ticket-window, .chat-window, .archive-window { min-height: 0; }.chat-window, .archive-window { grid-column: auto; }.chat-feed { min-height: 380px; padding: 14px; }.dialogue-compose > div, .fragment-list { grid-template-columns: 1fr; }
+  .audio-controls { right: 8px; bottom: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  .chat-message { opacity: 1; transform: none; }
 }

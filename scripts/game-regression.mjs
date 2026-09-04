@@ -9,6 +9,7 @@ try {
   const session = await vite.ssrLoadModule('/src/session.ts')
   const campaignSave = await vite.ssrLoadModule('/src/campaign-save.ts')
   const intermission = await vite.ssrLoadModule('/src/intermission.ts')
+  const i18n = await vite.ssrLoadModule('/src/i18n.ts')
 
   const startedAt = 1_000
   const narrativeFields = ['title', 'summary', 'briefing', 'success', 'failure', 'caller', 'objective', 'transition']
@@ -20,9 +21,48 @@ try {
   const dossierText = (chapter) => ['title', 'summary', 'briefing', 'caller', 'objective'].map(field => chapter[field].en).join(' ')
   assert.deepEqual(game.campaignLevels.map(chapter => chapter.id), Array.from({ length: 16 }, (_, index) => index + 1), 'the campaign must contain one ordered chapter for every level')
   for (const chapter of game.campaignLevels) {
-    for (const field of narrativeFields) assert.ok(chapter[field].en.trim(), `campaign level ${chapter.id} needs English ${field} text`)
+    for (const field of narrativeFields) {
+      assert.ok(chapter[field].en.trim(), `campaign level ${chapter.id} needs English ${field} text`)
+      assert.ok(chapter[field].de.trim(), `campaign level ${chapter.id} needs German ${field} text`)
+    }
     assert.ok(chapter.briefing.en.trim().split(/\s+/).length <= 24, `campaign level ${chapter.id} briefing must remain short enough to read aloud`)
-    for (const module of chapter.activeModules) assert.ok(chapter.moduleOutcomes[module]?.en.trim(), `campaign level ${chapter.id} needs an English story outcome for ${module}`)
+    assert.ok(!chapter.archiveFragment || chapter.archiveFragment.de.trim(), `campaign level ${chapter.id} needs a German archive fragment`)
+    for (const module of chapter.activeModules) {
+      assert.ok(chapter.moduleOutcomes[module]?.en.trim(), `campaign level ${chapter.id} needs an English story outcome for ${module}`)
+      assert.ok(chapter.moduleOutcomes[module]?.de.trim(), `campaign level ${chapter.id} needs a German story outcome for ${module}`)
+    }
+  }
+  const sharedUiValues = []
+  const compareUi = (english, german, path = '') => {
+    if (typeof english === 'string') {
+      assert.equal(typeof german, 'string', `German UI value missing at ${path}`)
+      if (english === german) sharedUiValues.push(path)
+      return
+    }
+    if (Array.isArray(english)) return english.forEach((value, index) => compareUi(value, german[index], `${path}[${index}]`))
+    for (const [key, value] of Object.entries(english)) compareUi(value, german[key], path ? `${path}.${key}` : key)
+  }
+  compareUi(i18n.ui('en'), i18n.ui('de'))
+  assert.deepEqual(sharedUiValues.sort(), ['english', 'german', 'level', 'offline', 'originalReality', 'seed', 'status.empty', 'tickets'].sort(), 'new UI copy must not silently reuse English in German')
+
+  const allowedSharedManualText = new Set(['analyst', 'archivist', 'engineer', 'mint', 'orange', 'pink', 'Band', 'Block', 'Orbital', 'STANDARD', 'Status', '◆ MAGENTA', '◉  Halo', '◉  Phase', '● CYAN', '✦  Nova'])
+  const compareLocalizedText = (english, german) => {
+    if (typeof english === 'string' && english === german && /[A-Za-z]{3}/.test(english)) {
+      const isIdentifier = /^(?:\d+ THz|\d\d:\d\d \/\/ DRIFT [\d+ ]+(?:ms|s)|PKT-[A-Z0-9]+|Nova ↔ Halo)$/.test(english)
+      assert.ok(isIdentifier || allowedSharedManualText.has(english), `German role view still reuses English text: ${english}`)
+      return
+    }
+    if (Array.isArray(english) && Array.isArray(german)) return english.forEach((value, index) => compareLocalizedText(value, german[index]))
+    if (english && german && typeof english === 'object' && typeof german === 'object') {
+      for (const key of Object.keys(english)) if (key in german) compareLocalizedText(english[key], german[key])
+    }
+  }
+  for (const levelId of game.campaignLevels.map(level => level.id)) {
+    const english = game.createGame(10_000 + levelId, 4, 'en', startedAt, 'standard', 'campaign', levelId)
+    const german = game.createGame(10_000 + levelId, 4, 'de', startedAt, 'standard', 'campaign', levelId)
+    english.phases = [[...english.activeModules]]
+    german.phases = [[...german.activeModules]]
+    for (const role of ['engineer', 'analyst', 'archivist']) compareLocalizedText(game.viewForRole(english, role, startedAt).manual, game.viewForRole(german, role, startedAt).manual)
   }
   assert.doesNotMatch(dossierText(game.campaignLevels[0]), /Mara Vale/, 'level 1 must not name its unknown caller before identification')
   assert.match(game.campaignLevels[0].success.en, /Mara Vale/, 'level 1 success must reveal Mara')
@@ -612,13 +652,30 @@ try {
     assert.equal(new Set([operatorDispatch.lines[0], engineerDispatch.lines[0], analystDispatch.lines[0], archivistDispatch.lines[0]]).size, 4, `level ${levelId} must give core roles distinct private fragments`)
     assert.deepEqual(specialistDispatch.lines, [engineerDispatch.lines[0], analystDispatch.lines[0], archivistDispatch.lines[0]], 'the two-player specialist must receive every absent specialist fragment')
     assert.deepEqual(researcherDispatch.lines, [analystDispatch.lines[0], archivistDispatch.lines[0]], 'the three-player research lead must cover both merged roles')
-    assert.ok(intermission.privateIntermissionFragment(levelId, 'de', 'operator'), `level ${levelId} private fragments must be translated`)
+    for (const role of ['operator', 'engineer', 'analyst', 'archivist', 'specialist', 'researcher']) {
+      const germanDispatch = intermission.privateIntermissionFragment(levelId, 'de', role)
+      assert.ok(germanDispatch, `level ${levelId} ${role} private fragments must be translated`)
+      assert.match(germanDispatch.channel, new RegExp(game.roleName(role, 'de').toLocaleUpperCase('de-DE')), `level ${levelId} private channel must localize the ${role} role name`)
+      assert.doesNotMatch(germanDispatch.channel, /ENGINEER|ARCHIVIST|SPECIALIST|RESEARCHER/, 'German private channels must not expose internal English role IDs')
+    }
   }
   assert.equal(intermission.privateIntermissionFragment(3, 'en', 'operator'), null, 'private fragments should appear only at selected intermissions')
   assert.doesNotMatch(JSON.stringify(game.viewForRole(game.createGame(808, 4, 'en', startedAt, 'standard', 'campaign', 8), 'analyst', startedAt)), /dead letter from Mara|relay graveyard/i, 'private intermission text must not leak through shared role views')
   assert.deepEqual(campaignSave.normalizeCampaignStoryProgress({ completedIntermissions: [4], archiveFragments: [4], dialogueChoices: [{ levelId: 4, choiceId: 'verify-mara' }, { levelId: 4, choiceId: 'invalid' }], privateFragments: ['secret'] }, game.campaignLevels.length), { completedIntermissions: [4], archiveFragments: [4], dialogueChoices: [{ levelId: 4, choiceId: 'verify-mara' }] }, 'shared campaign progress must keep valid dialogue choices but exclude private fragments')
 
   assert.equal(intermission.selectedDialogueOption(4, 'en', savedCampaign.dialogueChoices).reply, 'We trust you enough to verify every version.')
+  for (const levelId of intermission.dialogueChoiceLevels) {
+    const englishPrompt = intermission.dialoguePrompt(levelId, 'en')
+    const germanPrompt = intermission.dialoguePrompt(levelId, 'de')
+    assert.ok(germanPrompt?.question.trim(), `dialogue at level ${levelId} needs a German question`)
+    assert.notEqual(germanPrompt.question, englishPrompt.question, `dialogue at level ${levelId} must not reuse its English question`)
+    for (const englishOption of englishPrompt.options) {
+      const germanOption = germanPrompt.options.find(option => option.id === englishOption.id)
+      assert.ok(germanOption?.label.trim() && germanOption.reply.trim(), `dialogue option ${englishOption.id} needs complete German text`)
+      assert.notEqual(germanOption.label, englishOption.label, `dialogue option ${englishOption.id} needs a German label`)
+      assert.notEqual(germanOption.reply, englishOption.reply, `dialogue option ${englishOption.id} needs a German reply`)
+    }
+  }
   assert.match(intermission.dialogueFollowUp(5, 'en', savedCampaign.dialogueChoices).body, /Trust should survive a check/)
   assert.equal(intermission.dialogueBonusObjective(5, savedCampaign.dialogueChoices), 'no-mistakes')
   assert.equal(game.createGame(504, 4, 'en', startedAt, 'standard', 'campaign', 5, intermission.dialogueBonusObjective(5, savedCampaign.dialogueChoices)).bonusObjective, 'no-mistakes', 'a crew reply must select the next relevant optional objective')
@@ -662,6 +719,45 @@ try {
   assert.equal(intermission.campaignTicketStatus(5, 6, 8), 'resolved')
   assert.equal(intermission.campaignTicketStatus(4, 6, 8), 'corrupted')
   assert.equal(intermission.campaignTicketStatus(9, 6, 8), 'locked')
+
+  const correctActionFor = (mission, module, id) => {
+    if (module === 'router') {
+      const pair = game.routerSolution(mission)
+      const nodes = pair.map(symbol => mission.router.nodes.find(node => node.symbol === symbol).id)
+      return { id, type: 'router-connect', a: nodes[0], b: nodes[1] }
+    }
+    if (module === 'reactor') return { id, type: 'reactor-calibrate', dials: game.reactorSolution(mission) }
+    if (module === 'translation') return { id, type: 'translation-submit', sequence: game.translationSolution(mission) }
+    if (module === 'authentication') return { id, type: 'authentication-submit', candidateId: game.authenticationSolution(mission) }
+    if (module === 'packet') return { id, type: 'packet-submit', tileIds: game.packetSolution(mission) }
+    if (module === 'consent') return { id, type: 'consent-submit', ...game.consentSolution(mission) }
+    if (module === 'triage') return { id, type: 'triage-submit', allocations: game.triageSolution(mission) }
+    if (module === 'memory') return { id, type: 'memory-submit', choices: game.memorySolution(mission) }
+    if (module === 'reality') return { id, type: 'reality-submit', assignments: game.realitySolution(mission) }
+    if (module === 'dispatch') return { id, type: 'dispatch-submit', callerIds: game.dispatchSolution(mission) }
+    return { id, type: 'quarantine-submit', choices: game.quarantineSolution(mission) }
+  }
+  for (const language of ['en', 'de']) {
+    for (const levelId of game.campaignLevels.map(level => level.id)) {
+      let mission = game.createGame(20_000 + levelId, 4, language, startedAt, 'standard', 'campaign', levelId, 'no-mistakes')
+      if (mission.phases.length > 1) {
+        const futureModule = mission.phases[1][0]
+        const early = game.applyAction(mission, correctActionFor(mission, futureModule, `early-${language}-${levelId}`), startedAt + 1)
+        assert.equal(early[futureModule].resolved, false, `level ${levelId} must keep ${futureModule} locked until its required phase`)
+        assert.equal(early.stability, mission.stability, `an early level ${levelId} dependency submission must not cause damage`)
+      }
+      const completed = new Set()
+      for (let step = 0; step < 24 && mission.outcome === 'playing'; step += 1) {
+        const currentModule = game.viewForRole(mission, 'operator', startedAt + step + 2).visibleModules[0]
+        assert.ok(currentModule, `level ${levelId} needs a visible module while still playing`)
+        mission = game.applyAction(mission, correctActionFor(mission, currentModule, `solve-${language}-${levelId}-${step}`), startedAt + step + 2)
+        if (mission[currentModule].resolved) completed.add(currentModule)
+      }
+      assert.equal(mission.outcome, 'won', `campaign level ${levelId} must be solvable in required order in ${language}`)
+      assert.ok(mission.activeModules.every(module => completed.has(module)), `campaign level ${levelId} must exercise every required module in ${language}`)
+      assert.equal(mission.endReason, game.campaignLevel(levelId).success[language], `campaign level ${levelId} must end with its localized canonical success`)
+    }
+  }
 
   let verticalSliceProgress = 1
   const viewedIntermissions = []

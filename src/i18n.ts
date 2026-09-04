@@ -23,6 +23,7 @@ const en = {
   recoveryCode: 'CAMPAIGN RECOVERY', recoveryHelp: 'Saved automatically here. Copy this code to continue in another browser.', recoveryCopied: 'Recovery code copied.', recoveryRestored: 'Campaign restored and saved.', recoveryInvalid: 'That code is incomplete or damaged.', copyCode: 'COPY CODE', pasteCode: 'Paste recovery code', restore: 'RESTORE',
   difficulty: 'SHIFT LEVEL', minutes: 'min', stabilityEvery: 'stability every', score: 'SCORE', scoringHelp: 'Solve quickly and preserve stability. Mistakes cost points.', nextSurge: 'NEXT SURGE', dataLock: 'OLD DATA ACCEPTED',
   connectedCrew: 'CONNECTED CREW', openChannel: 'OPEN CHANNEL', hostRole: 'SESSION HOST • OPERATOR', assignedAtLaunch: 'ROLE ASSIGNED AT LAUNCH', waitingTech: 'Waiting for technician…',
+  crewOnline: 'Connected', crewOffline: 'Disconnected', addPower: 'Add one power unit to', removePower: 'Remove one power unit from', selectNode: 'Select route node',
   voiceRequired: 'VOICE COMMS REQUIRED', voiceHelp: 'Use a phone call, Discord, or your preferred telepathic channel.', start: 'START SHIFT', waitingHost: 'WAITING FOR HOST TO START',
   shiftEnds: 'SHIFT ENDS IN', stationStability: 'STATION STABILITY', leaveAria: 'Leave session', assignment: 'YOUR ASSIGNMENT', youAre: 'YOU', missionPhase: 'MISSION PHASE',
   operatorConsole: 'Operator Console', operatorSubtitle: 'You can touch the controls. You cannot see the procedures.', describe: 'Describe everything out loud.',
@@ -41,6 +42,7 @@ const en = {
   readAloud: 'Read useful details aloud.', clearance: 'CLEARANCE 4½', incidentStatus: 'INCIDENT STATUS', doNot: 'DO NOT', doNotText: 'Guess. Touch the Operator’s screen. Mention the insurance deductible.',
   shiftLog: 'SHIFT LOG', now: 'NOW', report: 'SHIFT REPORT', passable: 'PASSABLE', catastrophic: 'CATASTROPHIC', alive: 'CLOCKED OUT ALIVE', offline: 'STATION OFFLINE',
   success: 'Technically, a success.', failure: 'That could have gone better.', crewScore: 'CREW SCORE', newBest: 'NEW PERSONAL BEST', best: 'BEST', replay: 'NEW SHIFT', waitingReplay: 'Waiting for the host to start another shift…', incidentsResolved: 'INCIDENTS RESOLVED', incorrectActions: 'INCORRECT ACTIONS', systemsDamaged: 'SYSTEMS DAMAGED', finalStability: 'FINAL STABILITY', unauthorizedWormholes: 'UNAUTHORIZED WORMHOLES', returnDesk: 'RETURN TO DESK', seed: 'SEED',
+  crewChat: 'CREW CHAT', shiftBot: 'SHIFT 404 BOT', timestampValidation: 'TIMESTAMP VALIDATION', archiveService: 'ARCHIVE SERVICE', archive404: 'ARCHIVE 404', signatureMonitor: 'SIGNATURE MONITOR', unknownCallerLabel: 'UNKNOWN CALLER', deadLetterLabel: 'DEAD LETTER', ticketQueueLabel: 'TICKET QUEUE',
   status: { empty: '', calling: 'Calling the station…', waiting: 'Waiting for crew', connected: 'Direct link established', stillCalling: 'Still calling… If this persists, ask the host to keep their tab open.', hostDisconnected: 'Host disconnected — session paused', sessionEnded: 'The host ended this session.', capacity: 'This crew is full or already mid-shift.' },
 }
 
@@ -67,6 +69,7 @@ const de: typeof en = {
   recoveryCode: 'KAMPAGNE SICHERN', recoveryHelp: 'Wird hier automatisch gespeichert. Mit diesem Code könnt ihr in einem anderen Browser weiterspielen.', recoveryCopied: 'Wiederherstellungscode kopiert.', recoveryRestored: 'Kampagne wiederhergestellt und gespeichert.', recoveryInvalid: 'Der Code ist unvollständig oder beschädigt.', copyCode: 'CODE KOPIEREN', pasteCode: 'Wiederherstellungscode einfügen', restore: 'WIEDERHERSTELLEN',
   difficulty: 'SCHICHTSTUFE', minutes: 'Min.', stabilityEvery: 'Stabilität alle', score: 'PUNKTE', scoringHelp: 'Löst schnell und bewahrt Stabilität. Fehler kosten Punkte.', nextSurge: 'NÄCHSTER STOSS', dataLock: 'ALTE DATEN GÜLTIG',
   connectedCrew: 'VERBUNDENE CREW', openChannel: 'OFFENER KANAL', hostRole: 'SITZUNGSHOST • OPERATOR', assignedAtLaunch: 'ROLLE WIRD BEIM START VERGEBEN', waitingTech: 'Warte auf Techniker…',
+  crewOnline: 'Verbunden', crewOffline: 'Getrennt', addPower: 'Eine Energieeinheit hinzufügen für', removePower: 'Eine Energieeinheit entfernen von', selectNode: 'Routenknoten auswählen',
   voiceRequired: 'SPRACHKOMMUNIKATION NÖTIG', voiceHelp: 'Nutzt einen Anruf, Discord oder euren bevorzugten telepathischen Kanal.', start: 'SCHICHT STARTEN', waitingHost: 'WARTE AUF DEN START DURCH DEN HOST',
   shiftEnds: 'SCHICHTENDE IN', stationStability: 'STATIONSSTABILITÄT', leaveAria: 'Sitzung verlassen', assignment: 'DEINE AUFGABE', youAre: 'DU', missionPhase: 'EINSATZPHASE',
   operatorConsole: 'Operatorkonsole', operatorSubtitle: 'Du kannst die Steuerung bedienen. Du siehst die Prozeduren nicht.', describe: 'Beschreibe alles laut.',
@@ -85,6 +88,7 @@ const de: typeof en = {
   readAloud: 'Lies nützliche Details laut vor.', clearance: 'FREIGABE 4½', incidentStatus: 'VORFALLSTATUS', doNot: 'NICHT', doNotText: 'Raten. Den Bildschirm des Operators berühren. Den Selbstbehalt erwähnen.',
   shiftLog: 'SCHICHTPROTOKOLL', now: 'JETZT', report: 'SCHICHTBERICHT', passable: 'AKZEPTABEL', catastrophic: 'KATASTROPHAL', alive: 'LEBEND AUSGESTEMPELT', offline: 'STATION OFFLINE',
   success: 'Technisch gesehen ein Erfolg.', failure: 'Das hätte besser laufen können.', crewScore: 'CREW-PUNKTE', newBest: 'NEUE PERSÖNLICHE BESTLEISTUNG', best: 'BESTWERT', replay: 'NEUE SCHICHT', waitingReplay: 'Warte darauf, dass der Host eine neue Schicht startet…', incidentsResolved: 'VORFÄLLE GELÖST', incorrectActions: 'FALSCHE AKTIONEN', systemsDamaged: 'SYSTEME BESCHÄDIGT', finalStability: 'ENDSTABILITÄT', unauthorizedWormholes: 'UNAUTORISIERTE WURMLÖCHER', returnDesk: 'ZURÜCK ZUM DESK', seed: 'SEED',
+  crewChat: 'CREW-CHAT', shiftBot: 'SCHICHT-404-BOT', timestampValidation: 'ZEITSTEMPELPRÜFUNG', archiveService: 'ARCHIVDIENST', archive404: 'ARCHIV 404', signatureMonitor: 'SIGNATURÜBERWACHUNG', unknownCallerLabel: 'UNBEKANNTER ANRUFER', deadLetterLabel: 'UNZUSTELLBARE NACHRICHT', ticketQueueLabel: 'TICKET-WARTESCHLANGE',
   status: { empty: '', calling: 'Station wird gerufen…', waiting: 'Warte auf Crew', connected: 'Direktverbindung hergestellt', stillCalling: 'Rufe weiter an… Falls das anhält, bitte den Host, seinen Tab offen zu lassen.', hostDisconnected: 'Host getrennt — Sitzung pausiert', sessionEnded: 'Der Host hat diese Sitzung beendet.', capacity: 'Diese Crew ist voll oder bereits mitten in der Schicht.' },
 }
 

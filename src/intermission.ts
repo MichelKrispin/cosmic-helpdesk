@@ -1,4 +1,4 @@
-import type { BonusObjective, Locale, RoleId } from './game'
+import { roleName, type BonusObjective, type Locale, type RoleId } from './game'
 
 export type DialogueChoiceId = 'trust-mara' | 'verify-mara' | 'warn-callers' | 'secure-route' | 'hear-assembly' | 'answer-without-assembly' | 'welcome-relay' | 'audit-relay' | 'open-final-route' | 'wait-final-route'
 export type DialogueSelection = { levelId: number; choiceId: DialogueChoiceId }
@@ -219,9 +219,10 @@ export function dialogueBonusObjective(levelId: number, selections: DialogueSele
 export function privateIntermissionFragment(levelId: number, language: Locale, role: RoleId): PrivateIntermissionFragment | null {
   const chapter = roleParts[levelId]?.[language]
   if (!chapter) return null
+  const localizedRole = roleName(role, language).toLocaleUpperCase(language === 'de' ? 'de-DE' : 'en-US')
   return {
-    channel: language === 'de' ? `PRIVATER ROLLENKANAL // ${role.toUpperCase()}` : `PRIVATE ROLE CHANNEL // ${role.toUpperCase()}`,
-    prompt: language === 'de' ? 'Nur auf deinem Bildschirm. Lies deine Meldung laut vor; kombiniert eure Hinweise, um das nächste Ticket zu erkennen.' : 'Visible only on your screen. Read your dispatch aloud; combine the crew’s fragments to identify the next ticket.',
+    channel: language === 'de' ? `PRIVATER ROLLENKANAL // ${localizedRole}` : `PRIVATE ROLE CHANNEL // ${localizedRole}`,
+    prompt: language === 'de' ? 'Nur auf deinem Bildschirm. Lies deine Meldung laut vor. Kombiniert eure Hinweise, um das nächste Ticket zu erkennen.' : 'Visible only on your screen. Read your dispatch aloud; combine the crew’s fragments to identify the next ticket.',
     lines: partsForRole[role].map(part => chapter[part]),
   }
 }
